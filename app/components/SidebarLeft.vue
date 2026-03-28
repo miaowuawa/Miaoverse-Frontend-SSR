@@ -26,36 +26,17 @@ const discoverItems: NavItem[] = [
   { id: 'search', icon: 'fa-magnifying-glass', label: '搜索' },
 ]
 
-// 用户数据接口
-interface UserInfo {
-  id: string
-  username: string
-  displayName: string
-  avatar?: string
-}
-
-const currentUser: UserInfo = {
-  id: '1',
-  username: 'miaowuawa',
-  displayName: '@miaowuawa',
-}
-
 const emit = defineEmits<{
   (e: 'navigate', id: string): void
-  (e: 'post'): void
-  (e: 'switch-account'): void
+  (e: 'login'): void
 }>()
 
 const handleNavClick = (id: string) => {
   emit('navigate', id)
 }
 
-const handlePost = () => {
-  emit('post')
-}
-
-const handleSwitchAccount = () => {
-  emit('switch-account')
+const handleLogin = () => {
+  emit('login')
 }
 </script>
 
@@ -110,44 +91,24 @@ const handleSwitchAccount = () => {
           <span>{{ item.label }}</span>
         </button>
       </div>
-
-      <!-- 分隔线 -->
-      <div class="my-4 border-t border-gray-200"></div>
-
-      <!-- 切换账号 -->
-      <button
-        class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-gray-600 hover:bg-gray-100 transition-colors"
-        @click="handleSwitchAccount"
-      >
-        <i class="fa-solid fa-right-left w-5 text-center"></i>
-        <span>切换账号</span>
-      </button>
     </nav>
 
-    <!-- 底部操作区 -->
-    <div class="p-3 border-t border-gray-200 space-y-3">
-      <!-- 发帖按钮 -->
+    <!-- 底部登录提示区 -->
+    <div class="p-3 border-t border-gray-200">
       <button
-        class="w-full bg-lime-500 hover:bg-lime-600 text-white font-medium py-2.5 px-4 rounded-full flex items-center justify-center gap-2 transition-colors"
-        @click="handlePost"
+        class="w-full flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-gray-100 transition-colors"
+        @click="handleLogin"
       >
-        <i class="fa-solid fa-pen-to-square"></i>
-        <span>发帖</span>
-      </button>
-
-      <!-- 用户信息 -->
-      <div class="flex items-center gap-3 px-2">
-        <div class="w-8 h-8 rounded-full bg-gradient-to-br from-pink-400 to-orange-400 flex items-center justify-center overflow-hidden">
-          <img
-            v-if="currentUser.avatar"
-            :src="currentUser.avatar"
-            :alt="currentUser.displayName"
-            class="w-full h-full object-cover"
-          />
-          <i v-else class="fa-solid fa-user text-white text-sm"></i>
+        <!-- 灰色默认头像 -->
+        <div class="w-9 h-9 rounded-full bg-gray-300 flex items-center justify-center flex-shrink-0">
+          <i class="fa-solid fa-user text-gray-500 text-sm"></i>
         </div>
-        <span class="text-sm text-gray-700 font-medium">{{ currentUser.displayName }}</span>
-      </div>
+        <div class="flex-1 text-left">
+          <p class="text-sm font-medium text-gray-700">注册 / 登录</p>
+          <p class="text-xs text-gray-400">点击开始探索</p>
+        </div>
+        <i class="fa-solid fa-chevron-right text-gray-400 text-xs"></i>
+      </button>
     </div>
   </aside>
 </template>

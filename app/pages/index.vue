@@ -1,23 +1,18 @@
 <script setup lang="ts">
+import { ref } from 'vue'
+
 // 页面元数据
 useHead({
   title: '首页 - Miaoverse',
 })
 
+// 登录对话框显示状态
+const showLoginModal = ref(false)
+
 // 导航处理函数
 const handleNavigate = (id: string) => {
   console.log('Navigate to:', id)
   // TODO: 实现导航逻辑
-}
-
-const handlePost = () => {
-  console.log('Open post modal')
-  // TODO: 打开发帖弹窗
-}
-
-const handleSwitchAccount = () => {
-  console.log('Switch account')
-  // TODO: 实现切换账号逻辑
 }
 
 const handleNavClick = (id: string) => {
@@ -39,6 +34,21 @@ const handleSettingsClick = () => {
   console.log('Settings clicked')
   // TODO: 打开设置
 }
+
+// 登录相关处理
+const handleLogin = () => {
+  showLoginModal.value = true
+}
+
+const handleLoginSubmit = (data: { phone: string; code: string }) => {
+  console.log('Login submit:', data)
+  // TODO: 调用登录 API
+}
+
+const handleQQLogin = () => {
+  console.log('QQ login')
+  // TODO: 实现 QQ 登录
+}
 </script>
 
 <template>
@@ -46,8 +56,7 @@ const handleSettingsClick = () => {
     <!-- 左侧边栏 -->
     <SidebarLeft
       @navigate="handleNavigate"
-      @post="handlePost"
-      @switch-account="handleSwitchAccount"
+      @login="handleLogin"
     />
 
     <!-- 中间内容区 -->
@@ -60,6 +69,13 @@ const handleSettingsClick = () => {
       @notification-click="handleNotificationClick"
       @trend-click="handleTrendClick"
       @settings-click="handleSettingsClick"
+    />
+
+    <!-- 登录对话框 -->
+    <LoginModal
+      v-model:visible="showLoginModal"
+      @login="handleLoginSubmit"
+      @qq-login="handleQQLogin"
     />
   </div>
 </template>
