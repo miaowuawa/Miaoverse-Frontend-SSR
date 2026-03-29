@@ -13,7 +13,7 @@ useHead({
 const showLoginModal = ref(false)
 const showSearchModal = ref(false)
 
-// 公告数据
+// 公告数据 - 可以通过切换此数组来测试空状态
 const announcements = [
   {
     id: '1',
@@ -109,7 +109,7 @@ const handleSearchSelect = (item: any) => {
         <h1 class="text-2xl font-bold text-gray-900 mb-6">公告</h1>
         
         <!-- 公告列表 -->
-        <div class="space-y-4 max-w-3xl">
+        <div v-if="announcements.length > 0" class="space-y-4 max-w-3xl">
           <AnnouncementCard
             v-for="item in announcements"
             :key="item.id"
@@ -119,6 +119,15 @@ const handleSearchSelect = (item: any) => {
             :content="item.content"
             @click="handleCardClick(item.id)"
           />
+        </div>
+
+        <!-- 空状态占位符 -->
+        <div v-else class="bg-white rounded-2xl p-12 text-center max-w-3xl">
+          <div class="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <i class="fa-solid fa-bullhorn text-3xl text-gray-400"></i>
+          </div>
+          <h3 class="text-lg font-medium text-gray-900 mb-2">暂无公告</h3>
+          <p class="text-gray-500">目前没有新的公告信息</p>
         </div>
       </div>
     </div>

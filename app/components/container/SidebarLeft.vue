@@ -10,6 +10,11 @@ interface NavItem {
   badge?: number
 }
 
+// Props
+const props = defineProps<{
+  activeItem?: string | null
+}>()
+
 // 主导航项
 const mainNavItems: NavItem[] = [
   { id: 'timeline', icon: 'fa-star', label: '推荐', path: '/home' },
@@ -32,6 +37,10 @@ const router = useRouter()
 
 // 判断当前路由是否激活
 const isActive = (path: string) => {
+  // 如果传入了 activeItem，使用它来判断
+  if (props.activeItem !== undefined) {
+    return props.activeItem === path
+  }
   return route.path === path
 }
 
