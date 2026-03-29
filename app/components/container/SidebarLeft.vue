@@ -12,7 +12,7 @@ interface NavItem {
 
 // 主导航项
 const mainNavItems: NavItem[] = [
-  { id: 'timeline', icon: 'fa-star', label: '推荐', path: '/timeline' },
+  { id: 'timeline', icon: 'fa-star', label: '推荐', path: '/home' },
   { id: 'notifications', icon: 'fa-bell', label: '公告', path: '/notifications', badge: 0 },
   { id: 'notes', icon: 'fa-lightbulb', label: '活动', path: '/notes' },
   { id: 'follow-requests', icon: 'fa-user-plus', label: '社交', path: '/follow-requests' },

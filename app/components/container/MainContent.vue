@@ -1,171 +1,144 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import ContentWithImg from '~/components/ContentWithImg.vue'
-import Moments from '~/components/Moments.vue'
+import HomeContent from '~/components/content/HomeContent.vue'
+import RecommendedUsersContent from '~/components/content/RecommendedUsersContent.vue'
+import TopicsContent from '~/components/content/TopicsContent.vue'
+import ChannelsContent from '~/components/content/ChannelsContent.vue'
+import MoreContent from '~/components/content/MoreContent.vue'
+import SettingsContent from '~/components/content/SettingsContent.vue'
 
 // 顶部导航项接口
 interface TopNavItem {
   id: string
   icon: string
-  active?: boolean
+  label: string
 }
 
 const topNavItems: TopNavItem[] = [
-  { id: 'home', icon: 'fa-house', active: true },
-  { id: 'following', icon: 'fa-user-plus' },
-  { id: 'hashtags', icon: 'fa-hashtag' },
-  { id: 'channels', icon: 'fa-tv' },
-  { id: 'more', icon: 'fa-ellipsis' },
-  { id: 'setting', icon: 'fa-gear' },
+  { id: 'home', icon: 'fa-house', label: '首页' },
+  { id: 'following', icon: 'fa-user-plus', label: '推荐用户' },
+  { id: 'hashtags', icon: 'fa-hashtag', label: '话题' },
+  { id: 'channels', icon: 'fa-tv', label: '频道' },
+  { id: 'more', icon: 'fa-ellipsis', label: '更多' },
+  { id: 'setting', icon: 'fa-gear', label: '设置' },
 ]
 
-// 模拟帖子数据
-const posts = ref([
-  {
-    id: '1',
-    title: '《春日影》',
-    content: '悴んだ心 ふるえる眼差し世界で\n僕は ひとりぼっちだった\n散ることしか知らない春は\n毎年 冷たくあしらう\n\n暗がりの中 一方通行に ただただ\n言葉を書き殴って 期待するだけ......',
-    images: ['https://storage.moegirl.org.cn/moegirl/commons/0/00/Haruhikage%28Crychic%29.png'],
-    author: {
-      id: 'u1',
-      name: '高松灯',
-      avatar: '',
-    },
-    publishTime: '2025/3/29 19:26',
-    timeLabel: '今天',
-    stats: {
-      likes: 1680,
-      comments: 2499,
-      bookmarks: 1000,
-    },
-    isFollowing: false,
-    isLiked: false,
-    isBookmarked: false,
-  },
-])
-
-// 模拟动态数据
-const moments = ref([
-  {
-    id: 'm1',
-    content: '昨天的演出真的太棒了！现场的氛围超级好，大家一起唱《春日影》的时候真的很感动。感谢所有来支持的粉丝们！🎸✨\n\n#MyGO #演唱会 #鸡狗对邦',
-    images: [
-      'https://storage.moegirl.org.cn/moegirl/commons/2/28/BanG_Dream%21_It%27s_MyGO%21%21%21%21%21_01195006.jpg',
-      'https://storage.moegirl.org.cn/moegirl/commons/0/00/Haruhikage%28Crychic%29.png',
-      'https://storage.moegirl.org.cn/moegirl/commons/0/00/Haruhikage%28Crychic%29.png',
-    ],
-    author: {
-      id: 'u2',
-      name: '千早爱音',
-      avatar: 'https://storage.moegirl.org.cn/moegirl/commons/d/d2/Chihaya_Anon_icon.png',
-      verified: true,
-    },
-    publishTime: '2025/10/12 21:30',
-    location: '上海-梅赛德斯奔驰文化中心',
-    stats: {
-      likes: 5200,
-      comments: 890,
-      shares: 2300,
-    },
-    isLiked: true,
-  },
-  {
-    id: 'm2',
-    content: '喵星是什么网站？有猫吗？',
-    images: [],
-    author: {
-      id: 'u3',
-      name: '要乐奈',
-      avatar: '',
-      verified: false,
-    },
-    publishTime: '2小时前',
-    stats: {
-      likes: 1200,
-      comments: 340,
-      shares: 180,
-    },
-    isLiked: false,
-  },
-])
+// 当前激活的导航
+const activeNav = ref('home')
 
 const emit = defineEmits<{
   (e: 'nav-click', id: string): void
 }>()
 
 const handleNavClick = (id: string) => {
+  activeNav.value = id
   emit('nav-click', id)
 }
 
-// 帖子事件处理
-const handleFollow = (userId: string) => {
+// 首页内容事件处理
+const handleHomeFollow = (userId: string) => {
   console.log('关注用户:', userId)
 }
 
-const handleUnfollow = (userId: string) => {
+const handleHomeUnfollow = (userId: string) => {
   console.log('取消关注:', userId)
 }
 
-const handleLike = (postId: string) => {
+const handleHomeLike = (postId: string) => {
   console.log('点赞:', postId)
 }
 
-const handleUnlike = (postId: string) => {
+const handleHomeUnlike = (postId: string) => {
   console.log('取消点赞:', postId)
 }
 
-const handleBookmark = (postId: string) => {
+const handleHomeBookmark = (postId: string) => {
   console.log('收藏:', postId)
 }
 
-const handleUnbookmark = (postId: string) => {
+const handleHomeUnbookmark = (postId: string) => {
   console.log('取消收藏:', postId)
 }
 
-const handleComment = (postId: string) => {
+const handleHomeComment = (postId: string) => {
   console.log('评论:', postId)
 }
 
-const handleShare = (postId: string) => {
+const handleHomeShare = (postId: string) => {
   console.log('分享:', postId)
 }
 
-const handleNotInterested = (postId: string) => {
+const handleHomeNotInterested = (postId: string) => {
   console.log('不感兴趣:', postId)
-  posts.value = posts.value.filter(p => p.id !== postId)
 }
 
-const handleReport = (postId: string) => {
+const handleHomeReport = (postId: string) => {
   console.log('举报:', postId)
 }
 
-const handlePostClick = (postId: string) => {
+const handleHomePostClick = (postId: string) => {
   console.log('点击帖子:', postId)
 }
 
-// 动态事件处理
-const handleMomentLike = (id: string) => {
+const handleHomeMomentLike = (id: string) => {
   console.log('动态点赞:', id)
 }
 
-const handleMomentUnlike = (id: string) => {
+const handleHomeMomentUnlike = (id: string) => {
   console.log('动态取消点赞:', id)
 }
 
-const handleMomentComment = (id: string) => {
+const handleHomeMomentComment = (id: string) => {
   console.log('动态评论:', id)
 }
 
-const handleMomentShare = (id: string) => {
+const handleHomeMomentShare = (id: string) => {
   console.log('动态分享:', id)
 }
 
-const handleMomentClick = (id: string) => {
+const handleHomeMomentClick = (id: string) => {
   console.log('点击动态:', id)
 }
 
-const handleUserClick = (userId: string) => {
+const handleHomeUserClick = (userId: string) => {
   console.log('点击用户:', userId)
+}
+
+// 推荐用户事件处理
+const handleRecommendedUserFollow = (userId: string) => {
+  console.log('关注推荐用户:', userId)
+}
+
+const handleRecommendedUserUnfollow = (userId: string) => {
+  console.log('取消关注推荐用户:', userId)
+}
+
+const handleRecommendedUserClick = (userId: string) => {
+  console.log('点击推荐用户:', userId)
+}
+
+// 话题事件处理
+const handleTopicClick = (topicId: string) => {
+  console.log('点击话题:', topicId)
+}
+
+// 频道事件处理
+const handleChannelClick = (channelId: string) => {
+  console.log('点击频道:', channelId)
+}
+
+const handleChannelSubscribe = (channelId: string) => {
+  console.log('订阅频道:', channelId)
+}
+
+// 更多事件处理
+const handleMenuClick = (menuId: string) => {
+  console.log('点击菜单:', menuId)
+}
+
+// 设置事件处理
+const handleSettingClick = (settingId: string) => {
+  console.log('点击设置:', settingId)
 }
 </script>
 
@@ -178,12 +151,12 @@ const handleUserClick = (userId: string) => {
           v-for="item in topNavItems"
           :key="item.id"
           class="text-lg transition-colors relative"
-          :class="item.active ? 'text-lime-500' : 'text-gray-400 hover:text-gray-600'"
+          :class="activeNav === item.id ? 'text-lime-500' : 'text-gray-400 hover:text-gray-600'"
           @click="handleNavClick(item.id)"
         >
           <i :class="['fa-solid', item.icon]"></i>
           <span
-            v-if="item.active"
+            v-if="activeNav === item.id"
             class="absolute -bottom-4 left-1/2 transform -translate-x-1/2 w-6 h-0.5 bg-lime-500 rounded-full"
           ></span>
         </button>
@@ -200,40 +173,54 @@ const handleUserClick = (userId: string) => {
       </div>
     </header>
 
-    <!-- 内容区域 - 瀑布流 -->
-    <div class="flex-1 p-4">
-      <div class="max-w-2xl mx-auto space-y-4">
-        <!-- 文章卡片 -->
-        <ContentWithImg
-          v-for="post in posts"
-          :key="post.id"
-          :post="post"
-          @follow="handleFollow"
-          @unfollow="handleUnfollow"
-          @like="handleLike"
-          @unlike="handleUnlike"
-          @bookmark="handleBookmark"
-          @unbookmark="handleUnbookmark"
-          @comment="handleComment"
-          @share="handleShare"
-          @not-interested="handleNotInterested"
-          @report="handleReport"
-          @click="handlePostClick"
-        />
+    <!-- 内容区域 -->
+    <HomeContent
+      v-if="activeNav === 'home'"
+      @follow="handleHomeFollow"
+      @unfollow="handleHomeUnfollow"
+      @like="handleHomeLike"
+      @unlike="handleHomeUnlike"
+      @bookmark="handleHomeBookmark"
+      @unbookmark="handleHomeUnbookmark"
+      @comment="handleHomeComment"
+      @share="handleHomeShare"
+      @not-interested="handleHomeNotInterested"
+      @report="handleHomeReport"
+      @post-click="handleHomePostClick"
+      @moment-like="handleHomeMomentLike"
+      @moment-unlike="handleHomeMomentUnlike"
+      @moment-comment="handleHomeMomentComment"
+      @moment-share="handleHomeMomentShare"
+      @moment-click="handleHomeMomentClick"
+      @user-click="handleHomeUserClick"
+    />
 
-        <!-- 动态卡片 -->
-        <Moments
-          v-for="moment in moments"
-          :key="moment.id"
-          :moment="moment"
-          @like="handleMomentLike"
-          @unlike="handleMomentUnlike"
-          @comment="handleMomentComment"
-          @share="handleMomentShare"
-          @click="handleMomentClick"
-          @user-click="handleUserClick"
-        />
-      </div>
-    </div>
+    <RecommendedUsersContent
+      v-else-if="activeNav === 'following'"
+      @follow="handleRecommendedUserFollow"
+      @unfollow="handleRecommendedUserUnfollow"
+      @user-click="handleRecommendedUserClick"
+    />
+
+    <TopicsContent
+      v-else-if="activeNav === 'hashtags'"
+      @topic-click="handleTopicClick"
+    />
+
+    <ChannelsContent
+      v-else-if="activeNav === 'channels'"
+      @channel-click="handleChannelClick"
+      @subscribe="handleChannelSubscribe"
+    />
+
+    <MoreContent
+      v-else-if="activeNav === 'more'"
+      @menu-click="handleMenuClick"
+    />
+
+    <SettingsContent
+      v-else-if="activeNav === 'setting'"
+      @setting-click="handleSettingClick"
+    />
   </main>
 </template>
