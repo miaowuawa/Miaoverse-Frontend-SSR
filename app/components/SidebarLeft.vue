@@ -10,25 +10,25 @@ interface NavItem {
 
 // 主导航项
 const mainNavItems: NavItem[] = [
-  { id: 'timeline', icon: 'fa-clock', label: '时间线', active: true },
-  { id: 'notifications', icon: 'fa-bell', label: '通知', badge: 0 },
-  { id: 'notes', icon: 'fa-note-sticky', label: '便签' },
-  { id: 'cloud', icon: 'fa-cloud', label: '网盘' },
-  { id: 'follow-requests', icon: 'fa-user-plus', label: '关注请求' },
+  { id: 'timeline', icon: 'fa-star', label: '推荐', active: true },
+  { id: 'notifications', icon: 'fa-bell', label: '公告', badge: 0 },
+  { id: 'notes', icon: 'fa-lightbulb', label: '活动' },
+  { id: 'follow-requests', icon: 'fa-user-plus', label: '社交' },
   { id: 'messages', icon: 'fa-comments', label: '消息' },
+  { id: 'cloud', icon: 'fa-cloud', label: '网盘' },
 ]
 
 // 发现区域
 const discoverItems: NavItem[] = [
   { id: 'discover', icon: 'fa-hashtag', label: '发现' },
-  { id: 'announcements', icon: 'fa-bullhorn', label: '公告' },
+  { id: 'announcements', icon: 'fa-comment', label: '圈子' },
   { id: 'channels', icon: 'fa-tv', label: '频道' },
-  { id: 'search', icon: 'fa-magnifying-glass', label: '搜索' },
 ]
 
 const emit = defineEmits<{
   (e: 'navigate', id: string): void
   (e: 'login'): void
+  (e: 'search'): void
 }>()
 
 const handleNavClick = (id: string) => {
@@ -37,6 +37,10 @@ const handleNavClick = (id: string) => {
 
 const handleLogin = () => {
   emit('login')
+}
+
+const handleSearch = () => {
+  emit('search')
 }
 </script>
 
@@ -49,8 +53,8 @@ const handleLogin = () => {
           <i class="fa-solid fa-cat text-white text-sm"></i>
         </div>
       </div>
-      <button class="text-lime-500 hover:text-lime-600 transition-colors">
-        <i class="fa-solid fa-bolt"></i>
+      <button class="text-lime-500 hover:text-lime-600 transition-colors" @click="handleSearch">
+        <i class="fa-solid fa-magnifying-glass text-sm"></i>
       </button>
     </div>
 

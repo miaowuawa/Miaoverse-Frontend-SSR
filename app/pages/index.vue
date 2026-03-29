@@ -6,8 +6,9 @@ useHead({
   title: '首页 - Miaoverse',
 })
 
-// 登录对话框显示状态
+// 对话框显示状态
 const showLoginModal = ref(false)
+const showSearchModal = ref(false)
 
 // 导航处理函数
 const handleNavigate = (id: string) => {
@@ -49,6 +50,21 @@ const handleQQLogin = () => {
   console.log('QQ login')
   // TODO: 实现 QQ 登录
 }
+
+// 搜索相关处理
+const handleSearch = () => {
+  showSearchModal.value = true
+}
+
+const handleSearchSubmit = (keyword: string) => {
+  console.log('Search:', keyword)
+  // TODO: 执行搜索
+}
+
+const handleSearchSelect = (item: any) => {
+  console.log('Select:', item)
+  // TODO: 处理选中项
+}
 </script>
 
 <template>
@@ -57,6 +73,7 @@ const handleQQLogin = () => {
     <SidebarLeft
       @navigate="handleNavigate"
       @login="handleLogin"
+      @search="handleSearch"
     />
 
     <!-- 中间内容区 -->
@@ -76,6 +93,13 @@ const handleQQLogin = () => {
       v-model:visible="showLoginModal"
       @login="handleLoginSubmit"
       @qq-login="handleQQLogin"
+    />
+
+    <!-- 搜索对话框 -->
+    <SearchModal
+      v-model:visible="showSearchModal"
+      @search="handleSearchSubmit"
+      @select="handleSearchSelect"
     />
   </div>
 </template>
