@@ -1,38 +1,47 @@
 <script setup lang="ts">
-// 导航项接口，预留未来扩展
+import { computed } from 'vue'
+
+// 导航项接口
 interface NavItem {
   id: string
   icon: string
   label: string
-  active?: boolean
+  path: string
   badge?: number
 }
 
 // 主导航项
 const mainNavItems: NavItem[] = [
-  { id: 'timeline', icon: 'fa-star', label: '推荐', active: true },
-  { id: 'notifications', icon: 'fa-bell', label: '公告', badge: 0 },
-  { id: 'notes', icon: 'fa-lightbulb', label: '活动' },
-  { id: 'follow-requests', icon: 'fa-user-plus', label: '社交' },
-  { id: 'messages', icon: 'fa-comments', label: '消息' },
-  { id: 'cloud', icon: 'fa-cloud', label: '网盘' },
+  { id: 'timeline', icon: 'fa-star', label: '推荐', path: '/timeline' },
+  { id: 'notifications', icon: 'fa-bell', label: '公告', path: '/notifications', badge: 0 },
+  { id: 'notes', icon: 'fa-lightbulb', label: '活动', path: '/notes' },
+  { id: 'follow-requests', icon: 'fa-user-plus', label: '社交', path: '/follow-requests' },
+  { id: 'messages', icon: 'fa-comments', label: '消息', path: '/messages' },
+  { id: 'cloud', icon: 'fa-cloud', label: '网盘', path: '/cloud' },
 ]
 
 // 发现区域
 const discoverItems: NavItem[] = [
-  { id: 'discover', icon: 'fa-hashtag', label: '发现' },
-  { id: 'announcements', icon: 'fa-comment', label: '圈子' },
-  { id: 'channels', icon: 'fa-tv', label: '频道' },
+  { id: 'discover', icon: 'fa-hashtag', label: '发现', path: '/discover' },
+  { id: 'announcements', icon: 'fa-comment', label: '圈子', path: '/announcements' },
+  { id: 'channels', icon: 'fa-tv', label: '频道', path: '/channels' },
 ]
 
+const route = useRoute()
+const router = useRouter()
+
+// 判断当前路由是否激活
+const isActive = (path: string) => {
+  return route.path === path
+}
+
 const emit = defineEmits<{
-  (e: 'navigate', id: string): void
   (e: 'login'): void
   (e: 'search'): void
 }>()
 
-const handleNavClick = (id: string) => {
-  emit('navigate', id)
+const handleNavClick = (path: string) => {
+  router.push(path)
 }
 
 const handleLogin = () => {
@@ -48,11 +57,11 @@ const handleSearch = () => {
   <aside class="w-64 h-screen bg-white border-r border-gray-200 flex flex-col fixed left-0 top-0">
     <!-- Logo 区域 -->
     <div class="p-4 flex items-center justify-between">
-      <div class="flex items-center gap-2">
+      <NuxtLink to="/" class="flex items-center gap-2">
         <div class="w-8 h-8 bg-gradient-to-br from-pink-400 to-orange-400 rounded-lg flex items-center justify-center">
           <i class="fa-solid fa-cat text-white text-sm"></i>
         </div>
-      </div>
+      </NuxtLink>
       <button class="text-lime-500 hover:text-lime-600 transition-colors" @click="handleSearch">
         <i class="fa-solid fa-magnifying-glass text-sm"></i>
       </button>
@@ -66,8 +75,8 @@ const handleSearch = () => {
           v-for="item in mainNavItems"
           :key="item.id"
           class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors"
-          :class="item.active ? 'bg-lime-100 text-lime-700' : 'text-gray-600 hover:bg-gray-100'"
-          @click="handleNavClick(item.id)"
+          :class="isActive(item.path) ? 'bg-lime-100 text-lime-700' : 'text-gray-600 hover:bg-gray-100'"
+          @click="handleNavClick(item.path)"
         >
           <i :class="['fa-solid', item.icon, 'w-5 text-center']"></i>
           <span>{{ item.label }}</span>
@@ -88,8 +97,9 @@ const handleSearch = () => {
         <button
           v-for="item in discoverItems"
           :key="item.id"
-          class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-gray-600 hover:bg-gray-100 transition-colors"
-          @click="handleNavClick(item.id)"
+          class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors"
+          :class="isActive(item.path) ? 'bg-lime-100 text-lime-700' : 'text-gray-600 hover:bg-gray-100'"
+          @click="handleNavClick(item.path)"
         >
           <i :class="['fa-solid', item.icon, 'w-5 text-center']"></i>
           <span>{{ item.label }}</span>
