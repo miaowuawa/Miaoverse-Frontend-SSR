@@ -1,5 +1,10 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import SidebarLeft from '~/components/container/SidebarLeft.vue'
+import MainContent from '~/components/container/MainContent.vue'
+import SidebarRight from '~/components/container/SidebarRight.vue'
+import LoginModal from '~/components/modal/LoginModal.vue'
+import SearchModal from '~/components/modal/SearchModal.vue'
 
 // 页面元数据
 useHead({
