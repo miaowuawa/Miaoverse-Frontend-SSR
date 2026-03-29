@@ -8,11 +8,11 @@ interface TopNavItem {
 
 const topNavItems: TopNavItem[] = [
   { id: 'home', icon: 'fa-house', active: true },
-  { id: 'search', icon: 'fa-magnifying-glass' },
-  { id: 'notifications', icon: 'fa-bell' },
-  { id: 'settings', icon: 'fa-gear' },
-  { id: 'menu', icon: 'fa-bars' },
+  { id: 'following', icon: 'fa-user-plus' },
+  { id: 'hashtags', icon: 'fa-hashtag' },
+  { id: 'channels', icon: 'fa-tv' },
   { id: 'more', icon: 'fa-ellipsis' },
+  { id: 'setting', icon: 'fa-gear' },
 ]
 
 // 空状态配置

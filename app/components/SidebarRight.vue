@@ -15,7 +15,7 @@ const notifications: NotificationItem[] = [
   {
     id: '1',
     type: 'login',
-    title: '有新的登录',
+    title: '账号已在新设备上登录',
     time: '14小时前',
     icon: 'fa-user',
     iconColor: 'bg-blue-500',
