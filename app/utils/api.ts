@@ -16,8 +16,13 @@ export interface ReactionItem {
 export interface ServerMomentPayload {
   id: string | number
   user_id?: number
+  title?: string
   content?: string
   images?: string[]
+  status?: number
+  permission?: number
+  comment_permission?: number
+  top?: number
   created_at?: string
   updated_at?: string
   author?: ServerUserPayload
@@ -29,6 +34,33 @@ export interface ServerMomentPayload {
   reactions?: ReactionItem[]
   is_liked?: boolean
   is_following?: boolean
+}
+
+/** 上传成功返回的文件信息（POST /api/v1/user/files） */
+export interface ServerFileInfo {
+  uuid: string
+  file_name: string
+  file_url: string
+  file_type: string
+  file_ext: string
+  mime_type: string
+  file_size: number
+  hash: string
+  created_at: string
+}
+
+/** 发布/编辑动态返回（POST /api/v1/moment） */
+export interface ServerMomentInfo {
+  id: number
+  user_id: number
+  title: string
+  content: string
+  status: number
+  permission: number
+  comment_permission: number
+  top: number
+  created_at: string
+  updated_at: string
 }
 
 // 时间线 feed 条目（动态与文章统一结构，见后端 resp.FeedItem）
@@ -122,7 +154,6 @@ async function request<T>(url: string, options: { method?: string; body?: Record
     throw parseApiError(err, '网络异常，请稍后重试')
   }
 }
-
 export interface SmsLoginResult {
   type: 'success' | 'multiple_choices'
   uid?: number
@@ -233,6 +264,46 @@ export const api = {
     return request<{ code: number; msg: string; moment_id: string | number; emoji: string }>(`/api/v1/moment/${encodeURIComponent(id)}/reactions`, {
       method: 'POST',
       body: { emoji },
+    })
+  },
+
+  // 上传文件：POST /api/v1/user/files（multipart/form-data）。
+  // file_type 显式传 image，避免服务端按 MIME 误判；permission 默认不公开，
+  // 动态图片不依赖文件分享权限（动态本身的可见权限已控制展示）。
+  async uploadFile(file: File, fileType = 'image', permission = 2): Promise<ServerFileInfo> {
+    const form = new FormData()
+    form.append('file', file)
+    form.append('file_type', fileType)
+    form.append('permission', String(permission))
+    let res
+    try {
+      res = await $fetch.raw<{ code: number; msg: string; file: ServerFileInfo }>('/api/v1/user/files', {
+        method: 'POST',
+        body: form,
+        ignoreResponseError: true,
+      })
+    } catch (err: any) {
+      throw parseApiError(err, '网络异常，请稍后重试')
+    }
+    const data = res._data ?? {}
+    if (res.status !== 201) {
+      throw new ApiRequestError(res.status, data.code ?? res.status, data.msg ?? '上传失败')
+    }
+    return data.file
+  },
+
+  // 发布动态：POST /api/v1/moment（JSON）
+  publishMoment(payload: {
+    content: string
+    status?: number
+    permission?: number
+    comment_permission?: number
+    top?: number
+    file_uuids?: string[]
+  }): Promise<{ code: number; msg: string; moment: ServerMomentInfo }> {
+    return request('/api/v1/moment', {
+      method: 'POST',
+      body: payload,
     })
   },
 }

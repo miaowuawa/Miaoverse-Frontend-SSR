@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, watch, onMounted } from 'vue'
 import Moments from '~/components/Moments.vue'
 import { api, type ServerFeedItem } from '~/utils/api'
 import { notifyError } from '~/utils/notify'
@@ -111,6 +111,12 @@ async function fetchTimeline() {
 }
 
 onMounted(() => {
+  fetchTimeline()
+})
+
+// 发布动态成功后刷新时间线（default.vue 中递增 feed:refreshKey）
+const feedRefreshKey = useState<number>('feed:refreshKey', () => 0)
+watch(feedRefreshKey, () => {
   fetchTimeline()
 })
 

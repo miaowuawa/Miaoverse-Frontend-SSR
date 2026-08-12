@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import PublishFab from '~/components/PublishFab.vue'
 import PublishModal from '~/components/modal/PublishModal.vue'
+import { notifySuccess } from '~/utils/notify'
 
 // 页面加载时从后端恢复登录态（仅客户端执行，SSR 阶段跳过）
 const auth = useAuth()
@@ -11,6 +12,9 @@ onMounted(() => {
 // 全局发布入口：所有页面右下角显示发布按钮（仅登录后可见）
 const showPublishModal = ref(false)
 
+// feed 刷新信号：发布成功后 +1，首页时间线监听到后重新拉取
+const feedRefreshKey = useState<number>('feed:refreshKey', () => 0)
+
 const handleCreatePost = () => {
   showPublishModal.value = true
 }
@@ -19,8 +23,10 @@ const handleCreateArticle = () => {
   console.log('发文章')
 }
 
-const handlePublishSubmit = (payload: { content: string; visibility: string }) => {
-  console.log('发布动态:', payload)
+// 发布成功后由 PublishModal 触发（发布/图片上传在弹窗内完成后才关闭）
+const handlePublished = () => {
+  notifySuccess('发布成功')
+  feedRefreshKey.value++
 }
 </script>
 
@@ -37,7 +43,7 @@ const handlePublishSubmit = (payload: { content: string; visibility: string }) =
     <!-- 发布动态弹窗（全局） -->
     <PublishModal
       v-model:visible="showPublishModal"
-      @submit="handlePublishSubmit"
+      @published="handlePublished"
     />
   </div>
 </template>
