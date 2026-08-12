@@ -20,7 +20,7 @@ const handleMenuClick = (menuId: string) => {
   <div class="flex-1 p-4">
     <div class="max-w-2xl mx-auto">
       <h2 class="text-xl font-bold text-gray-900 mb-4 px-2">更多</h2>
-      <div class="bg-white rounded-2xl overflow-hidden">
+      <div class="glass-card rounded-2xl overflow-hidden">
         <div
           v-for="(item, index) in menuItems"
           :key="item.id"

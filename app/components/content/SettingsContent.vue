@@ -35,7 +35,7 @@ const handleSettingClick = (settingId: string) => {
         <div
           v-for="group in settingGroups"
           :key="group.title"
-          class="bg-white rounded-2xl overflow-hidden"
+          class="glass-card rounded-2xl overflow-hidden"
         >
           <h3 class="text-sm font-medium text-gray-400 px-4 py-3">{{ group.title }}</h3>
           <div

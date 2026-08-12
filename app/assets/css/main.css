@@ -6,3 +6,124 @@
   --color-bg-light: #f9fafb;
   --color-border-light: #e5e7eb;
 }
+
+/* ============================================================
+   毛玻璃 + 液态玻璃效果
+   - .glass-card        : 所有卡片通用（静态玻璃质感）
+   - .glass-card-feed   : 信息流卡片（叠加 pointer 跟随光斑 + tilt 倾斜）
+   - 全部使用 transform/opacity 合成层属性，避免触发 layout/paint
+   - 低性能/减少动效/小屏触屏环境通过媒体查询自动降级
+   ============================================================ */
+
+.glass-card {
+  position: relative;
+  /* 毛玻璃：半透明白底 + 背景模糊 + 饱和度提升 */
+  background-color: rgba(255, 255, 255, 0.72);
+  -webkit-backdrop-filter: blur(14px) saturate(180%);
+  backdrop-filter: blur(14px) saturate(180%);
+  /* 液态玻璃：细边框 + 内外高光 + 柔和投影 */
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.7) inset,           /* 顶部内高光 */
+    0 -1px 0 rgba(255, 255, 255, 0.25) inset,          /* 底部内阴影 */
+    0 6px 24px rgba(17, 24, 39, 0.06),                 /* 主投影 */
+    0 1px 2px rgba(17, 24, 39, 0.04);                  /* 近距投影 */
+}
+
+/* 液态光斑层（仅 feed 卡片激活，默认隐藏） */
+.glass-card-feed::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  /* 鼠标跟随的彩色光晕，由 JS 通过 --mx/--my/--ma 设置位置与强度 */
+  background: radial-gradient(
+    420px circle at var(--mx, 50%) var(--my, 50%),
+    rgba(132, 204, 22, 0.14),
+    rgba(56, 189, 248, 0.08) 35%,
+    transparent 60%
+  );
+  opacity: var(--ma, 0);
+  transition: opacity 240ms ease;
+  /* 仅合成 opacity，不触发 paint 层级抖动 */
+  will-change: opacity;
+  z-index: 0;
+}
+
+/* 高光描边层（鼠标进入时点亮） */
+.glass-card-feed::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  border: 1px solid transparent;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.55),
+    transparent 40%,
+    transparent 60%,
+    rgba(255, 255, 255, 0.25)
+  ) border-box;
+  -webkit-mask: linear-gradient(#000 0 0) padding-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  opacity: var(--ha, 0);
+  transition: opacity 240ms ease;
+  z-index: 0;
+}
+
+/* 让 feed 卡片的内容层级在伪元素之上 */
+.glass-card-feed > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* tilt 用 transform 叠加。
+   注意：不在此处加 transition——角度由 JS 逐帧指数平滑，
+   CSS transition 会在 Edge/Chromium 下与 rAF 更新互相打架，
+   导致倾斜滞后甚至完全不渲染。
+   也不用 perspective()/preserve-3d/will-change：卡片是平面元素，
+   3D 渲染上下文叠加 backdrop-filter 是 Edge 合成层冻结的已知诱因，
+   会让 var(--rx/--ry) 的更新不再重绘；3° 的倾斜无需透视也足够自然。 */
+.glass-tilt {
+  transform:
+    rotateX(var(--rx, 0deg))
+    rotateY(var(--ry, 0deg))
+    translateZ(0);
+}
+
+/* ---------- 性能降级 ---------- */
+
+/* 用户偏好减少动效：关闭过渡与光斑 */
+@media (prefers-reduced-motion: reduce) {
+  .glass-card-feed::before,
+  .glass-card-feed::after {
+    display: none;
+  }
+  .glass-tilt {
+    transform: none !important;
+    transition: none !important;
+  }
+}
+
+/* 窄屏（移动端默认触屏）：关闭 tilt，保留基础玻璃 */
+@media (max-width: 768px) {
+  .glass-tilt {
+    transform: none !important;
+    transition: none !important;
+  }
+  .glass-card-feed::before { display: none; }
+}
+
+/* 低性能设备：navigator.deviceMemory <= 4 时由 JS 加 .low-perf 类 */
+.low-perf .glass-card {
+  background-color: rgba(255, 255, 255, 0.92);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: 0 1px 3px rgba(17, 24, 39, 0.08);
+}
+.low-perf .glass-card-feed::before,
+.low-perf .glass-card-feed::after { display: none; }
+.low-perf .glass-tilt { transform: none !important; transition: none !important; }

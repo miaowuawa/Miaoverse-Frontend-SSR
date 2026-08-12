@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useGlassTilt } from '~/composables/useGlassTilt'
+
 interface Props {
   date: string
   author: string
@@ -15,11 +17,15 @@ const emit = defineEmits<{
 const handleClick = () => {
   emit('click')
 }
+
+// 玻璃倾斜效果（信息流卡片）
+const cardRef = useGlassTilt()
 </script>
 
 <template>
-  <div 
-    class="bg-white rounded-2xl p-6 shadow-sm hover:shadow-md transition-all cursor-pointer"
+  <div
+    ref="cardRef"
+    class="glass-card glass-card-feed glass-tilt rounded-2xl p-6 hover:shadow-lg transition-shadow cursor-pointer"
     @click="handleClick"
   >
     <!-- 头部：日期和作者 -->
@@ -42,8 +48,4 @@ const handleClick = () => {
 </template>
 
 <style scoped>
-/* 悬停效果 */
-.bg-white {
-  will-change: transform, box-shadow;
-}
 </style>

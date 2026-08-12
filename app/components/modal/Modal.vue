@@ -5,11 +5,13 @@ const props = withDefaults(defineProps<{
   position?: 'center' | 'top'
   showClose?: boolean
   closeOnOverlay?: boolean
+  cardClass?: string
 }>(), {
   width: 'max-w-xl',
   position: 'center',
   showClose: true,
   closeOnOverlay: true,
+  cardClass: '',
 })
 
 const emit = defineEmits<{
@@ -47,8 +49,8 @@ const handleKeydown = (e: KeyboardEvent) => {
         <Transition name="scale">
           <div
             v-if="visible"
-            class="bg-white rounded-2xl shadow-2xl w-full overflow-hidden relative"
-            :class="width"
+            class="glass-card rounded-2xl shadow-2xl w-full overflow-hidden relative"
+            :class="[width, cardClass]"
             @keydown="handleKeydown"
             tabindex="-1"
           >

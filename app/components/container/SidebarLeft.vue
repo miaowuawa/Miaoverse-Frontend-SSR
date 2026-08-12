@@ -1,5 +1,8 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { ref, computed } from 'vue'
+import type { CurrentUser } from '~/types/user'
+import type { MenuItem, ParsedMenu } from '~/types/menu'
+import AccountMenu from '~/components/user/AccountMenu.vue'
 
 // 导航项接口
 interface NavItem {
@@ -13,7 +16,16 @@ interface NavItem {
 // Props
 const props = defineProps<{
   activeItem?: string | null
+  currentUser?: CurrentUser | null
+  serverMenu?: ParsedMenu | null
 }>()
+
+// 登录态兜底：部分页面未传 currentUser prop（如 channels/announcements 等），
+// 回退到全局 auth 状态（useState 跨页面共享），保证左侧栏在所有页面
+// 都能正确反映登录/未登录，避免登录后或刷新后仍显示"注册 / 登录"。
+const auth = useAuth()
+const effectiveUser = computed(() => props.currentUser ?? auth.currentUser.value ?? null)
+const isLoggedIn = computed(() => !!effectiveUser.value)
 
 // 主导航项
 const mainNavItems: NavItem[] = [
@@ -34,6 +46,8 @@ const discoverItems: NavItem[] = [
 
 const route = useRoute()
 const router = useRouter()
+const anchorEl = ref<HTMLElement | null>(null)
+const menuVisible = ref(false)
 
 // 判断当前路由是否激活
 const isActive = (path: string) => {
@@ -47,6 +61,10 @@ const isActive = (path: string) => {
 const emit = defineEmits<{
   (e: 'login'): void
   (e: 'search'): void
+  (e: 'logout'): void
+  (e: 'switch-account'): void
+  (e: 'menu-action', item: MenuItem): void
+  (e: 'sign-in'): void
 }>()
 
 const handleNavClick = (path: string) => {
@@ -59,6 +77,33 @@ const handleLogin = () => {
 
 const handleSearch = () => {
   emit('search')
+}
+
+const toggleMenu = () => {
+  menuVisible.value = !menuVisible.value
+}
+
+const handleMenuClose = () => {
+  menuVisible.value = false
+}
+
+const handleLogout = () => {
+  emit('logout')
+}
+
+const handleSwitchAccount = () => {
+  emit('switch-account')
+}
+
+const handleMenuAction = (item: MenuItem) => {
+  emit('menu-action', item)
+  if (item.route) {
+    router.push(item.route)
+  }
+}
+
+const handleSignIn = () => {
+  emit('sign-in')
 }
 </script>
 
@@ -116,13 +161,14 @@ const handleSearch = () => {
       </div>
     </nav>
 
-    <!-- 底部登录提示区 -->
+    <!-- 底部区域 -->
     <div class="p-3 border-t border-gray-200">
+      <!-- 未登录：注册/登录 -->
       <button
-        class="w-full flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-gray-100 transition-colors"
+        v-if="!isLoggedIn"
+        class="w-full flex items-center gap-3 px-2 py-2 rounded-xl hover:bg-gray-100 transition-colors"
         @click="handleLogin"
       >
-        <!-- 灰色默认头像 -->
         <div class="w-9 h-9 rounded-full bg-gray-300 flex items-center justify-center flex-shrink-0">
           <i class="fa-solid fa-user text-gray-500 text-sm"></i>
         </div>
@@ -132,6 +178,38 @@ const handleSearch = () => {
         </div>
         <i class="fa-solid fa-chevron-right text-gray-400 text-xs"></i>
       </button>
+
+      <!-- 已登录：用户展开菜单 -->
+      <button
+        v-else
+        ref="anchorEl"
+        class="w-full flex items-center gap-3 px-2 py-2 rounded-xl hover:bg-gray-100 transition-colors"
+        :class="{ 'bg-lime-50': menuVisible }"
+        @click="toggleMenu"
+      >
+        <div class="w-9 h-9 rounded-full bg-gradient-to-br from-lime-400 to-lime-500 flex items-center justify-center flex-shrink-0">
+          <i class="fa-solid fa-user text-white text-sm"></i>
+        </div>
+        <div class="flex-1 text-left min-w-0">
+          <p class="text-sm font-medium text-gray-800 truncate">{{ effectiveUser?.displayName || '用户' }}</p>
+          <p class="text-xs text-gray-400 truncate">{{ effectiveUser?.handle || '' }}</p>
+        </div>
+        <i
+          :class="['fa-solid text-gray-500 text-xs transition-transform duration-200', menuVisible ? 'fa-chevron-up rotate-0' : 'fa-chevron-down']"
+        ></i>
+      </button>
     </div>
   </aside>
+
+  <AccountMenu
+    v-model:visible="menuVisible"
+    :current-user="effectiveUser"
+    :server-menu="serverMenu"
+    :anchor-el="anchorEl ?? undefined"
+    @close="handleMenuClose"
+    @logout="handleLogout"
+    @switch-account="handleSwitchAccount"
+    @menu-action="handleMenuAction"
+    @sign-in="handleSignIn"
+  />
 </template>

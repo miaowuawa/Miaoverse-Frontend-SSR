@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useImageViewer } from '~/composables/useImageViewer'
+import { useGlassTilt } from '~/composables/useGlassTilt'
 
 // 动态数据接口
 interface MomentData {
@@ -39,6 +40,9 @@ const emit = defineEmits<{
 // 图片预览
 const { openViewer } = useImageViewer()
 
+// 玻璃倾斜效果（信息流卡片）
+const cardRef = useGlassTilt()
+
 // 本地状态
 const isLiked = ref(props.moment.isLiked || false)
 const showFullContent = ref(false)
@@ -74,14 +78,9 @@ const handleShare = () => {
   emit('share', props.moment.id)
 }
 
-// 点击动态
+// 点击动态区域：点击正文/展开收起时不触发跳转；整张卡片点击事件交由父级处理
 const handleClick = () => {
   emit('click', props.moment.id)
-}
-
-// 点击用户
-const handleUserClick = () => {
-  emit('user-click', props.moment.author.id)
 }
 
 // 点击图片预览
@@ -105,7 +104,7 @@ const toggleExpand = () => {
 </script>
 
 <template>
-  <div class="bg-white rounded-2xl p-4 shadow-sm hover:shadow-md transition-all duration-300">
+  <div ref="cardRef" class="glass-card glass-card-feed glass-tilt rounded-2xl p-4 hover:shadow-lg transition-shadow duration-300">
     <!-- 头部：用户信息 -->
     <div class="flex items-start gap-3 mb-3">
       <!-- 头像 -->
@@ -148,15 +147,15 @@ const toggleExpand = () => {
     <div class="mb-3 cursor-pointer" @click="handleClick">
       <p class="text-gray-800 text-[15px] leading-relaxed whitespace-pre-wrap">
         {{ displayContent }}
-        <button 
-          v-if="shouldTruncate && !showFullContent" 
+        <button
+          v-if="shouldTruncate && !showFullContent"
           class="text-lime-600 text-sm ml-1 hover:underline"
           @click.stop="toggleExpand"
         >
           展开
         </button>
-        <button 
-          v-else-if="shouldTruncate && showFullContent" 
+        <button
+          v-else-if="shouldTruncate && showFullContent"
           class="text-gray-400 text-sm ml-1 hover:underline"
           @click.stop="toggleExpand"
         >
@@ -169,8 +168,9 @@ const toggleExpand = () => {
     <div v-if="moment.images && moment.images.length > 0" class="mb-3">
       <!-- 单图 -->
       <div v-if="moment.images.length === 1" class="rounded-xl overflow-hidden max-w-[200px]">
-        <img 
-          :src="moment.images[0]" 
+        <img
+          :src="moment.images[0]"
+          alt=""
           class="w-full aspect-square object-cover hover:scale-105 transition-transform duration-500 cursor-pointer"
           @click.stop="handleImageClick(0)"
         >
@@ -178,8 +178,8 @@ const toggleExpand = () => {
       
       <!-- 多图 - 每行3个 -->
       <div v-else class="flex flex-wrap gap-2">
-        <div 
-          v-for="(img, index) in moment.images" 
+        <div
+          v-for="(img, index) in moment.images"
           :key="index"
           class="rounded-xl overflow-hidden relative"
           :class="[
@@ -187,14 +187,15 @@ const toggleExpand = () => {
             'aspect-square'
           ]"
         >
-          <img 
-            :src="img" 
+          <img
+            :src="img"
+            alt=""
             class="w-full h-full object-cover hover:scale-105 transition-transform duration-500 cursor-pointer"
             @click.stop="handleImageClick(index)"
           >
           <!-- 更多图片指示器 -->
-          <div 
-            v-if="index === 8 && moment.images.length > 9" 
+          <div
+            v-if="index === 8 && moment.images.length > 9"
             class="absolute inset-0 bg-black/50 flex items-center justify-center text-white font-medium text-lg cursor-pointer"
             @click.stop="handleImageClick(index)"
           >
@@ -208,7 +209,7 @@ const toggleExpand = () => {
     <div class="flex items-center justify-between pt-3 border-t border-gray-100">
       <div class="flex items-center gap-6">
         <!-- 点赞 -->
-        <button 
+        <button
           class="flex items-center gap-1.5 text-gray-500 hover:text-pink-500 transition-colors group"
           :class="{ 'text-pink-500': isLiked }"
           @click="handleLike"
@@ -220,7 +221,7 @@ const toggleExpand = () => {
         </button>
 
         <!-- 评论 -->
-        <button 
+        <button
           class="flex items-center gap-1.5 text-gray-500 hover:text-blue-500 transition-colors group"
           @click="handleComment"
         >
@@ -231,7 +232,7 @@ const toggleExpand = () => {
         </button>
 
         <!-- 分享 -->
-        <button 
+        <button
           class="flex items-center gap-1.5 text-gray-500 hover:text-green-500 transition-colors group"
           @click="handleShare"
         >

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import GlassFeedCard from '~/components/GlassFeedCard.vue'
 
 // 频道数据
 const channels = ref([
@@ -27,10 +28,10 @@ const handleSubscribe = (channelId: string) => {
     <div class="max-w-2xl mx-auto">
       <h2 class="text-xl font-bold text-gray-900 mb-4 px-2">推荐频道</h2>
       <div class="space-y-3">
-        <div
+        <GlassFeedCard
           v-for="channel in channels"
           :key="channel.id"
-          class="bg-white rounded-2xl p-4 flex items-center gap-4 hover:shadow-md transition-all cursor-pointer"
+          class="rounded-2xl p-4 flex items-center gap-4 hover:shadow-lg transition-shadow cursor-pointer"
           @click="handleChannelClick(channel.id)"
         >
           <div class="w-14 h-14 bg-lime-100 rounded-xl flex items-center justify-center flex-shrink-0">
@@ -47,7 +48,7 @@ const handleSubscribe = (channelId: string) => {
           >
             订阅
           </button>
-        </div>
+        </GlassFeedCard>
       </div>
     </div>
   </div>

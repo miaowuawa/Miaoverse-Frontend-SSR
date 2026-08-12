@@ -4,14 +4,21 @@ import SidebarRight from '~/components/container/SidebarRight.vue'
 import AnnouncementCard from '~/components/AnnouncementCard.vue'
 import LoginModal from '~/components/modal/LoginModal.vue'
 import SearchModal from '~/components/modal/SearchModal.vue'
+import type { MultipleAccountChoice } from '~/types/user'
 
 useHead({
   title: '公告 - Miaoverse',
 })
 
+// 模拟登录态
+const auth = useAuth()
+const { currentUser, isLoggedIn } = auth
+
 // 登录和搜索对话框状态
 const showLoginModal = ref(false)
 const showSearchModal = ref(false)
+
+const loginModalRef = ref<InstanceType<typeof LoginModal> | null>(null)
 
 // 公告数据 - 可以通过切换此数组来测试空状态
 const announcements = [
@@ -78,12 +85,36 @@ const handleSearch = () => {
   showSearchModal.value = true
 }
 
-const handleLoginSubmit = (data: { phone: string; code: string }) => {
-  console.log('Login submit:', data)
+const handleLoginSubmit = async (data: { phone: string; region: number; uuid: string; code: number }) => {
+  try {
+    const result = await auth.loginBySMS(data)
+
+    if (result.type === 'multiple_choices') {
+      loginModalRef.value?.openAccountSelector(result.choices)
+      return
+    }
+
+    showLoginModal.value = false
+  } catch (err) {
+    loginModalRef.value?.finishLogin(err)
+  }
+}
+
+const handleAccountSelected = async (choice: MultipleAccountChoice) => {
+  try {
+    await auth.confirmLoginByChoice(choice)
+    showLoginModal.value = false
+  } catch (err) {
+    loginModalRef.value?.finishLogin(err)
+  }
 }
 
 const handleQQLogin = () => {
   console.log('QQ login')
+}
+
+const handleLogout = async () => {
+  await auth.logout()
 }
 
 const handleSearchSubmit = (keyword: string) => {
@@ -100,14 +131,15 @@ const handleSearchSelect = (item: any) => {
     <!-- 左侧边栏 -->
     <SidebarLeft
       @login="handleLogin"
+      @logout="handleLogout"
       @search="handleSearch"
     />
 
     <!-- 中间内容区 -->
-    <div class="flex-1 ml-64 mr-80">
+    <div class="flex-1 ml-64" :class="{ 'mr-80': isLoggedIn }">
       <div class="p-6">
         <h1 class="text-2xl font-bold text-gray-900 mb-6">公告</h1>
-        
+
         <!-- 公告列表 -->
         <div v-if="announcements.length > 0" class="space-y-4 max-w-3xl">
           <AnnouncementCard
@@ -133,12 +165,15 @@ const handleSearchSelect = (item: any) => {
     </div>
 
     <!-- 右侧边栏 -->
-    <SidebarRight />
+    <SidebarRight v-if="isLoggedIn" />
 
     <!-- 登录对话框 -->
     <LoginModal
+      ref="loginModalRef"
       v-model:visible="showLoginModal"
+      :current-user="currentUser"
       @login="handleLoginSubmit"
+      @select-account="handleAccountSelected"
       @qq-login="handleQQLogin"
     />
 

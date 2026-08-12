@@ -157,7 +157,7 @@ const handleMomentShare = (id: string) => {
 }
 
 const handleMomentClick = (id: string) => {
-  emit('moment-click', id)
+  navigateTo(`/moment/${id}`)
 }
 
 const handleUserClick = (userId: string) => {

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useGlassTilt } from '~/composables/useGlassTilt'
+
 interface Props {
   user: {
     id: string
@@ -29,11 +31,15 @@ const handleFollow = () => {
 const handleClick = () => {
   emit('click', props.user.id)
 }
+
+// 玻璃倾斜效果（信息流卡片）
+const cardRef = useGlassTilt()
 </script>
 
 <template>
-  <div 
-    class="bg-white rounded-2xl p-4 flex items-center gap-4 hover:shadow-md transition-all cursor-pointer"
+  <div
+    ref="cardRef"
+    class="glass-card glass-card-feed glass-tilt rounded-2xl p-4 flex items-center gap-4 hover:shadow-lg transition-shadow cursor-pointer"
     @click="handleClick"
   >
     <!-- 头像 -->
@@ -95,7 +101,4 @@ const handleClick = () => {
 </template>
 
 <style scoped>
-.bg-white {
-  will-change: transform, box-shadow;
-}
 </style>

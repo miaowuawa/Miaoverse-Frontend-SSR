@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useImageViewer } from '~/composables/useImageViewer'
+import { useGlassTilt } from '~/composables/useGlassTilt'
 
 // 帖子数据接口
 interface PostData {
@@ -45,6 +46,9 @@ const emit = defineEmits<{
 
 // 图片预览
 const { openViewer } = useImageViewer()
+
+// 玻璃倾斜效果（信息流卡片）
+const cardRef = useGlassTilt()
 
 // 本地状态
 const isFollowing = ref(props.post.isFollowing || false)
@@ -142,7 +146,7 @@ if (typeof window !== 'undefined') {
 </script>
 
 <template>
-  <div class="bg-white rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow cursor-pointer" @click="handleClick">
+  <div ref="cardRef" class="glass-card glass-card-feed glass-tilt rounded-2xl p-5 hover:shadow-lg transition-shadow cursor-pointer" @click="handleClick">
     <!-- 头部：标题和菜单 -->
     <div class="flex items-start justify-between mb-3">
       <h3 class="text-lg font-bold text-gray-900 line-clamp-1 flex-1 pr-4">{{ post.title }}</h3>

@@ -1,14 +1,27 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import Modal from './Modal.vue'
+import AccountSelectorModal from './AccountSelectorModal.vue'
+import type { MultipleAccountChoice } from '~/types/user'
+import { api } from '~/utils/api'
+import { notifyError, notifySuccess } from '~/utils/notify'
 
 const props = defineProps<{
   visible: boolean
+  currentUser?: {
+    id: string
+    displayName: string
+    handle: string
+    avatar?: string | null
+    token?: string
+  } | null
 }>()
 
 const emit = defineEmits<{
   (e: 'update:visible', value: boolean): void
-  (e: 'login', data: { phone: string; code: string }): void
+  (e: 'login', data: { phone: string; region: number; uuid: string; code: number }): void
+  (e: 'login-multiple-choices', data: { phone: string; choices: MultipleAccountChoice[] }): void
+  (e: 'select-account', choice: MultipleAccountChoice): void
   (e: 'qq-login'): void
 }>()
 
@@ -16,44 +29,94 @@ const phone = ref('')
 const code = ref('')
 const countdown = ref(0)
 const isLoading = ref(false)
+const isSending = ref(false)
+const codeUUID = ref('')
+const showAccountSelector = ref(false)
+const multipleChoices = ref<MultipleAccountChoice[]>([])
 
 const handleClose = () => {
   emit('update:visible', false)
   phone.value = ''
   code.value = ''
+  codeUUID.value = ''
+  isLoading.value = false
+  showAccountSelector.value = false
+  multipleChoices.value = []
 }
 
-const handleGetCode = () => {
-  if (!phone.value || countdown.value > 0) return
+const handleSelectorClose = () => {
+  showAccountSelector.value = false
+}
 
-  // 开始倒计时
-  countdown.value = 60
-  const timer = setInterval(() => {
-    countdown.value--
-    if (countdown.value <= 0) {
-      clearInterval(timer)
+// 父组件直接关闭弹窗（如登录成功）时，重置内部状态
+watch(
+  () => props.visible,
+  (visible) => {
+    if (!visible) {
+      phone.value = ''
+      code.value = ''
+      codeUUID.value = ''
+      isLoading.value = false
+      showAccountSelector.value = false
+      multipleChoices.value = []
     }
-  }, 1000)
+  }
+)
 
-  // TODO: 调用获取验证码 API
-  console.log('获取验证码:', phone.value)
+const handleGetCode = async () => {
+  if (!phone.value || countdown.value > 0 || isSending.value) return
+
+  isSending.value = true
+  try {
+    const res = await api.sendSmsCode(phone.value)
+    codeUUID.value = res.code_uuid
+    notifySuccess(res.msg || '验证码已发送')
+    // 开始倒计时
+    countdown.value = 60
+    const timer = setInterval(() => {
+      countdown.value--
+      if (countdown.value <= 0) {
+        clearInterval(timer)
+      }
+    }, 1000)
+  } catch (err) {
+    notifyError(err, '验证码发送失败，请稍后重试')
+  } finally {
+    isSending.value = false
+  }
 }
 
 const handleLogin = () => {
-  if (!phone.value || !code.value) return
+  if (!phone.value || !code.value || !codeUUID.value || isLoading.value) return
 
   isLoading.value = true
-  emit('login', { phone: phone.value, code: code.value })
+  emit('login', {
+    phone: phone.value,
+    region: 86,
+    uuid: codeUUID.value,
+    code: Number(code.value),
+  })
+}
 
-  // 模拟登录延迟
-  setTimeout(() => {
-    isLoading.value = false
-  }, 1000)
+// 登录流程结束（成功或失败）时由父组件调用，用于关闭 loading 与弹出错误通知
+function finishLogin(err?: unknown) {
+  isLoading.value = false
+  if (err) {
+    notifyError(err, '登录失败，请稍后重试')
+  }
 }
 
 const handleQQLogin = () => {
   emit('qq-login')
 }
+
+// 暴露给父组件：当登录接口返回 300 multiple choices 时调用
+function openAccountSelector(choices: MultipleAccountChoice[]) {
+  multipleChoices.value = choices
+  showAccountSelector.value = true
+}
+
+defineExpose({ openAccountSelector, finishLogin })
 </script>
 
 <template>
@@ -61,12 +124,13 @@ const handleQQLogin = () => {
     :visible="visible"
     width="max-w-2xl"
     position="center"
+    card-class="modal-glass"
     @close="handleClose"
     @update:visible="emit('update:visible', $event)"
   >
     <div class="flex">
       <!-- 左侧：二维码区域 -->
-      <div class="w-64 bg-gray-50 p-6 flex flex-col items-center justify-center border-r border-gray-100">
+      <div class="login-qr-glass w-64 p-6 flex flex-col items-center justify-center border-r border-white/40">
         <!-- 二维码占位 -->
         <div class="w-40 h-40 bg-white rounded-xl shadow-sm flex items-center justify-center mb-4">
           <div class="text-center">
@@ -97,9 +161,10 @@ const handleQQLogin = () => {
             >
             <button
               class="mr-2 px-4 py-2.5 bg-lime-500 hover:bg-lime-600 text-white text-sm rounded-lg transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed whitespace-nowrap"
-              :disabled="countdown > 0 || !phone"
+              :disabled="countdown > 0 || !phone || isSending"
               @click="handleGetCode"
             >
+              <i v-if="isSending" class="fa-solid fa-circle-notch fa-spin mr-1"></i>
               {{ countdown > 0 ? `${countdown}s` : '获取验证码' }}
             </button>
           </div>
@@ -129,7 +194,7 @@ const handleQQLogin = () => {
         <!-- 登录按钮 -->
         <button
           class="w-full bg-lime-500 hover:bg-lime-600 text-white font-medium py-3 rounded-xl transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-          :disabled="!phone || !code || isLoading"
+          :disabled="!phone || !code || !codeUUID || isLoading"
           @click="handleLogin"
         >
           <i v-if="isLoading" class="fa-solid fa-circle-notch fa-spin"></i>
@@ -153,5 +218,56 @@ const handleQQLogin = () => {
         </button>
       </div>
     </div>
+
+    <!-- 多账号选择弹窗 -->
+    <AccountSelectorModal
+      v-model:visible="showAccountSelector"
+      :phone="phone"
+      :choices="multipleChoices"
+      :current-user="currentUser ?? null"
+      @confirm="emit('select-account', $event)"
+      @close="handleSelectorClose"
+    />
   </Modal>
 </template>
+
+<style scoped>
+/* 左侧扫码区：毛玻璃 —— 半透明白底 + 强背景模糊，让弹窗外页面色彩
+   透进来形成可见的磨砂质感；二维码白底框保持纯白，不影响扫码 */
+.login-qr-glass {
+  position: relative;
+  background-color: rgba(255, 255, 255, 0.2);
+  /* 顶部一束白色高光模拟玻璃反光，不再使用灰色调 */
+  background-image: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.35) 0%,
+    rgba(255, 255, 255, 0) 40%
+  );
+  -webkit-backdrop-filter: blur(20px) saturate(170%);
+  backdrop-filter: blur(20px) saturate(170%);
+  box-shadow:
+    1px 0 0 rgba(255, 255, 255, 0.55) inset,
+    0 -1px 0 rgba(255, 255, 255, 0.25) inset;
+}
+
+/* 毛玻璃要透出色彩，弹窗底板需更透明（仅登录弹窗生效，类名唯一） */
+:global(.modal-glass) {
+  background-color: rgba(255, 255, 255, 0.52);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  backdrop-filter: blur(16px) saturate(180%);
+}
+
+/* 低性能设备降级（由 <html>.low-perf 全局生效时，回退到接近不透明的浅灰） */
+:global(.low-perf .login-qr-glass) {
+  background-color: rgba(249, 250, 251, 0.95);
+  background-image: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+:global(.low-perf .modal-glass) {
+  background-color: rgba(255, 255, 255, 0.92);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+</style>
