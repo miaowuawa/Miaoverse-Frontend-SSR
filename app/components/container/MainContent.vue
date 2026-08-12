@@ -35,51 +35,7 @@ const handleNavClick = (id: string) => {
   emit('nav-click', id)
 }
 
-// 首页内容事件处理
-const handleHomeFollow = (userId: string) => {
-  console.log('关注用户:', userId)
-}
-
-const handleHomeUnfollow = (userId: string) => {
-  console.log('取消关注:', userId)
-}
-
-const handleHomeLike = (postId: string) => {
-  console.log('点赞:', postId)
-}
-
-const handleHomeUnlike = (postId: string) => {
-  console.log('取消点赞:', postId)
-}
-
-const handleHomeBookmark = (postId: string) => {
-  console.log('收藏:', postId)
-}
-
-const handleHomeUnbookmark = (postId: string) => {
-  console.log('取消收藏:', postId)
-}
-
-const handleHomeComment = (postId: string) => {
-  console.log('评论:', postId)
-}
-
-const handleHomeShare = (postId: string) => {
-  console.log('分享:', postId)
-}
-
-const handleHomeNotInterested = (postId: string) => {
-  console.log('不感兴趣:', postId)
-}
-
-const handleHomeReport = (postId: string) => {
-  console.log('举报:', postId)
-}
-
-const handleHomePostClick = (postId: string) => {
-  console.log('点击帖子:', postId)
-}
-
+// 首页内容事件处理（时间线动态）
 const handleHomeMomentLike = (id: string) => {
   console.log('动态点赞:', id)
 }
@@ -176,17 +132,6 @@ const handleSettingClick = (settingId: string) => {
     <!-- 内容区域 -->
     <HomeContent
       v-if="activeNav === 'home'"
-      @follow="handleHomeFollow"
-      @unfollow="handleHomeUnfollow"
-      @like="handleHomeLike"
-      @unlike="handleHomeUnlike"
-      @bookmark="handleHomeBookmark"
-      @unbookmark="handleHomeUnbookmark"
-      @comment="handleHomeComment"
-      @share="handleHomeShare"
-      @not-interested="handleHomeNotInterested"
-      @report="handleHomeReport"
-      @post-click="handleHomePostClick"
       @moment-like="handleHomeMomentLike"
       @moment-unlike="handleHomeMomentUnlike"
       @moment-comment="handleHomeMomentComment"

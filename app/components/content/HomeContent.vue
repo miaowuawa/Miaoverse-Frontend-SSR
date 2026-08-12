@@ -1,90 +1,120 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-import ContentWithImg from '~/components/ContentWithImg.vue'
+import { ref, onMounted } from 'vue'
 import Moments from '~/components/Moments.vue'
+import { api, type ServerFeedItem } from '~/utils/api'
+import { notifyError } from '~/utils/notify'
 
-// 模拟帖子数据
-const posts = ref([
-  {
-    id: '1',
-    title: '《春日影》',
-    content: '悴んだ心 ふるえる眼差し世界で\n僕は ひとりぼっちだった\n散ることしか知らない春は\n毎年 冷たくあしらう\n\n暗がりの中 一方通行に ただただ\n言葉を書き殴って 期待するだけ......',
-    images: ['https://storage.moegirl.org.cn/moegirl/commons/0/00/Haruhikage%28Crychic%29.png'],
-    author: {
-      id: 'u1',
-      name: '高松灯',
-      avatar: '',
-    },
-    publishTime: '2025/3/29 19:26',
-    timeLabel: '今天',
-    stats: {
-      likes: 1680,
-      comments: 2499,
-      bookmarks: 1000,
-    },
-    isFollowing: false,
-    isLiked: false,
-    isBookmarked: false,
-  },
-])
+// 时间线动态数据（与后端 GET /api/v1/feeds/timeline 对接）
+interface MomentData {
+  id: string
+  content: string
+  images?: string[]
+  author: {
+    id: string
+    name: string
+    avatar?: string
+    verified?: boolean
+  }
+  publishTime: string
+  location?: string
+  stats: {
+    likes: number
+    comments: number
+    shares: number
+  }
+  isLiked?: boolean
+  /** 动态图片文件 UUID 列表（后端下发，需换取临时 URL） */
+  fileUUIDs?: string[]
+}
 
-// 模拟动态数据
-const moments = ref([
-  {
-    id: 'm1',
-    content: '昨天的演出真的太棒了！现场的氛围超级好，大家一起唱《春日影》的时候真的很感动。感谢所有来支持的粉丝们！🎸✨\n\n#MyGO #演唱会 #鸡狗对邦',
-    images: [
-      'https://storage.moegirl.org.cn/moegirl/commons/2/28/BanG_Dream%21_It%27s_MyGO%21%21%21%21%21_01195006.jpg',
-      'https://storage.moegirl.org.cn/moegirl/commons/0/00/Haruhikage%28Crychic%29.png',
-      'https://storage.moegirl.org.cn/moegirl/commons/0/00/Haruhikage%28Crychic%29.png',
-    ],
-    author: {
-      id: 'u2',
-      name: '千早爱音',
-      avatar: 'https://storage.moegirl.org.cn/moegirl/commons/d/d2/Chihaya_Anon_icon.png',
-      verified: true,
-    },
-    publishTime: '2025/10/12 21:30',
-    location: '上海-梅赛德斯奔驰文化中心',
-    stats: {
-      likes: 5200,
-      comments: 890,
-      shares: 2300,
-    },
-    isLiked: true,
-  },
-  {
-    id: 'm2',
-    content: '喵星是什么网站？有猫吗？',
+const moments = ref<MomentData[]>([])
+const loading = ref(false)
+const feedLoaded = ref(false)
+
+// 后端时间（ISO 字符串）转展示格式：今天显示时分，其余显示 "YYYY/MM/DD"
+function formatPublishTime(iso?: string): string {
+  if (!iso) return ''
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return ''
+  const now = new Date()
+  const sameDay = date.getFullYear() === now.getFullYear()
+    && date.getMonth() === now.getMonth()
+    && date.getDate() === now.getDate()
+  if (sameDay) {
+    return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
+  }
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  return `${y}/${m}/${d}`
+}
+
+// 后端 feed 条目 → 首页动态卡片数据（仅取动态类型）
+function normalizeFeedMoment(item: ServerFeedItem): MomentData | null {
+  if (item.type !== 'moment') return null
+  const authorRaw = item.author
+  const id = String(item.id ?? '')
+  return {
+    id,
+    content: item.content ?? '',
     images: [],
     author: {
-      id: 'u3',
-      name: '要乐奈',
-      avatar: '',
+      id: authorRaw?.id ? String(authorRaw.id) : String(item.user_id ?? ''),
+      name: authorRaw?.display_name || authorRaw?.displayName || authorRaw?.nickname || '用户',
+      avatar: authorRaw?.avatar ?? undefined,
       verified: false,
     },
-    publishTime: '2小时前',
+    publishTime: formatPublishTime(item.created_at),
     stats: {
-      likes: 1200,
-      comments: 340,
-      shares: 180,
+      likes: item.stats?.likes ?? 0,
+      comments: item.stats?.comments ?? 0,
+      shares: item.stats?.shares ?? 0,
     },
-    isLiked: false,
-  },
-])
+    isLiked: item.is_liked ?? false,
+    fileUUIDs: item.images ?? [],
+  }
+}
+
+// 将动态图片 UUID 批量换取临时访问 URL（只取公开可访问的，其余静默跳过）。
+// 安全：UUID 仅用于请求后端临时链接接口，不向任何外部地址拼接原始存储 URL。
+async function resolveMomentImages(moment: MomentData): Promise<void> {
+  if (!moment.fileUUIDs || moment.fileUUIDs.length === 0) return
+  const urls: string[] = []
+  for (const uuid of moment.fileUUIDs) {
+    try {
+      const res = await api.getFileTempLink(uuid)
+      if (res.link?.url) {
+        urls.push(res.link.url)
+      }
+    } catch {
+      // 单张图片换取失败（如文件未公开分享）不影响其余图片展示
+    }
+  }
+  moment.images = urls
+}
+
+async function fetchTimeline() {
+  loading.value = true
+  try {
+    const res = await api.getFeedTimeline(0, 20)
+    const items = (res.items ?? [])
+      .map(normalizeFeedMoment)
+      .filter((m): m is MomentData => m !== null)
+    await Promise.all(items.map(resolveMomentImages))
+    moments.value = items
+  } catch (err) {
+    notifyError(err, '获取时间线失败')
+  } finally {
+    loading.value = false
+    feedLoaded.value = true
+  }
+}
+
+onMounted(() => {
+  fetchTimeline()
+})
 
 const emit = defineEmits<{
-  (e: 'follow', userId: string): void
-  (e: 'unfollow', userId: string): void
-  (e: 'like', postId: string): void
-  (e: 'unlike', postId: string): void
-  (e: 'bookmark', postId: string): void
-  (e: 'unbookmark', postId: string): void
-  (e: 'comment', postId: string): void
-  (e: 'share', postId: string): void
-  (e: 'not-interested', postId: string): void
-  (e: 'report', postId: string): void
-  (e: 'post-click', postId: string): void
   (e: 'moment-like', id: string): void
   (e: 'moment-unlike', id: string): void
   (e: 'moment-comment', id: string): void
@@ -92,52 +122,6 @@ const emit = defineEmits<{
   (e: 'moment-click', id: string): void
   (e: 'user-click', userId: string): void
 }>()
-
-// 帖子事件处理
-const handleFollow = (userId: string) => {
-  emit('follow', userId)
-}
-
-const handleUnfollow = (userId: string) => {
-  emit('unfollow', userId)
-}
-
-const handleLike = (postId: string) => {
-  emit('like', postId)
-}
-
-const handleUnlike = (postId: string) => {
-  emit('unlike', postId)
-}
-
-const handleBookmark = (postId: string) => {
-  emit('bookmark', postId)
-}
-
-const handleUnbookmark = (postId: string) => {
-  emit('unbookmark', postId)
-}
-
-const handleComment = (postId: string) => {
-  emit('comment', postId)
-}
-
-const handleShare = (postId: string) => {
-  emit('share', postId)
-}
-
-const handleNotInterested = (postId: string) => {
-  emit('not-interested', postId)
-  posts.value = posts.value.filter(p => p.id !== postId)
-}
-
-const handleReport = (postId: string) => {
-  emit('report', postId)
-}
-
-const handlePostClick = (postId: string) => {
-  emit('post-click', postId)
-}
 
 // 动态事件处理
 const handleMomentLike = (id: string) => {
@@ -157,7 +141,7 @@ const handleMomentShare = (id: string) => {
 }
 
 const handleMomentClick = (id: string) => {
-  navigateTo(`/moment/${id}`)
+  navigateTo(`/moment/${encodeURIComponent(id)}`)
 }
 
 const handleUserClick = (userId: string) => {
@@ -168,36 +152,33 @@ const handleUserClick = (userId: string) => {
 <template>
   <div class="flex-1 p-4">
     <div class="max-w-2xl mx-auto space-y-4">
-      <!-- 文章卡片 -->
-      <ContentWithImg
-        v-for="post in posts"
-        :key="post.id"
-        :post="post"
-        @follow="handleFollow"
-        @unfollow="handleUnfollow"
-        @like="handleLike"
-        @unlike="handleUnlike"
-        @bookmark="handleBookmark"
-        @unbookmark="handleUnbookmark"
-        @comment="handleComment"
-        @share="handleShare"
-        @not-interested="handleNotInterested"
-        @report="handleReport"
-        @click="handlePostClick"
-      />
+      <!-- 加载中 -->
+      <div v-if="loading" class="glass-card rounded-2xl p-10 flex flex-col items-center justify-center gap-2 text-gray-400">
+        <i class="fa-solid fa-circle-notch fa-spin text-2xl"></i>
+        <span class="text-sm">加载中...</span>
+      </div>
+
+      <!-- 无数据 -->
+      <div v-else-if="feedLoaded && moments.length === 0" class="glass-card rounded-2xl p-10 flex flex-col items-center justify-center gap-3 text-center">
+        <i class="fa-regular fa-folder-open text-5xl text-gray-300"></i>
+        <p class="text-gray-500">暂时没有动态</p>
+        <p class="text-sm text-gray-400">发布第一条动态，和大家分享你的世界吧～</p>
+      </div>
 
       <!-- 动态卡片 -->
-      <Moments
-        v-for="moment in moments"
-        :key="moment.id"
-        :moment="moment"
-        @like="handleMomentLike"
-        @unlike="handleMomentUnlike"
-        @comment="handleMomentComment"
-        @share="handleMomentShare"
-        @click="handleMomentClick"
-        @user-click="handleUserClick"
-      />
+      <template v-else>
+        <Moments
+          v-for="moment in moments"
+          :key="moment.id"
+          :moment="moment"
+          @like="handleMomentLike"
+          @unlike="handleMomentUnlike"
+          @comment="handleMomentComment"
+          @share="handleMomentShare"
+          @click="handleMomentClick"
+          @user-click="handleUserClick"
+        />
+      </template>
     </div>
   </div>
 </template>

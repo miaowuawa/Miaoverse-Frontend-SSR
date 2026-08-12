@@ -31,6 +31,29 @@ export interface ServerMomentPayload {
   is_following?: boolean
 }
 
+// 时间线 feed 条目（动态与文章统一结构，见后端 resp.FeedItem）
+export interface ServerFeedItem {
+  id: string | number
+  type?: 'moment' | 'article'
+  user_id?: number
+  title?: string
+  content?: string
+  description?: string
+  cover?: string
+  images?: string[]
+  created_at?: string
+  updated_at?: string
+  author?: ServerUserPayload
+  stats?: {
+    likes?: number
+    comments?: number
+    shares?: number
+  }
+  is_liked?: boolean
+  is_following?: boolean
+  full?: boolean
+}
+
 export function normalizeMomentDetail(raw: ServerMomentPayload): MomentDetailData {
   const authorRaw = raw.author
   const id = String(raw.id ?? '')
@@ -168,6 +191,23 @@ export const api = {
     // 安全：对路径参数做 encodeURIComponent，防止 ID 中的特殊字符破坏 URL 路径语义
     const res = await request<{ code: number; msg: string; moment: ServerMomentPayload }>(`/api/v1/moments/${encodeURIComponent(id)}`)
     return normalizeMomentDetail(res.moment)
+  },
+
+  // 时间线 feed：GET /api/v1/feeds/timeline?content=moment&offset=&limit=（无需登录）
+  // 首页只展示动态；分页 limit 由调用方显式传入，避免默认 20 条被误用
+  getFeedTimeline(offset = 0, limit = 20) {
+    const query = new URLSearchParams({
+      content: 'moment',
+      offset: String(offset),
+      limit: String(limit),
+    })
+    return request<{ code: number; msg: string; count: number; items: ServerFeedItem[] }>(`/api/v1/feeds/timeline?${query.toString()}`)
+  },
+
+  // 文件临时访问链接：GET /api/v1/user/files/:uuid/shared-link
+  // 未登录仅可换取公开（permission=0）文件的链接；不返回原始存储 URL
+  getFileTempLink(uuid: string) {
+    return request<{ code: number; msg: string; link: { uuid: string; url: string; expires_at: string } }>(`/api/v1/user/files/${encodeURIComponent(uuid)}/shared-link`)
   },
 
   // 给动态点赞：POST /api/v1/moment/likes（使用与现有后端一致的复数命名）

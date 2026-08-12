@@ -4,7 +4,8 @@
 import { notification } from 'ant-design-vue'
 import { ApiRequestError } from '~/utils/api'
 
-function withCode(msg: string, code: number | null | undefined): string {
+/** 在提示信息后追加自定义业务码，如「对方拉黑了你（40301）」 */
+export function withCode(msg: string, code: number | null | undefined): string {
   if (typeof code === 'number' && code > 0) {
     return `${msg}（${code}）`
   }

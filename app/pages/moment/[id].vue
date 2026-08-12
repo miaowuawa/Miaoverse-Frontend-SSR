@@ -7,8 +7,9 @@ import LoginModal from '~/components/modal/LoginModal.vue'
 import AccountSelectorModal from '~/components/modal/AccountSelectorModal.vue'
 import SearchModal from '~/components/modal/SearchModal.vue'
 import MomentDetail, { type MomentDetailData } from '~/components/MomentDetail.vue'
-import { api } from '~/utils/api'
-import { notifyError, notifySuccess } from '~/utils/notify'
+import InfoModal from '~/components/modal/InfoModal.vue'
+import { api, ApiRequestError } from '~/utils/api'
+import { notifyError, withCode } from '~/utils/notify'
 import type { MenuItem, ServerMenuPayload } from '~/types/menu'
 import type { MultipleAccountChoice } from '~/types/user'
 
@@ -26,56 +27,77 @@ const moment = ref<MomentDetailData | null>(null)
 const loading = ref(false)
 const commentsLoading = ref(false)
 
-async function fetchMomentDetail(id: string): Promise<MomentDetailData> {
-  // 安全：对拼接进 URL 的 ID 做 encodeURIComponent，防止路径注入
-  try {
-    return await api.getMomentDetail(id)
-  } catch (err) {
-    // 后端接口尚未实现时回退到 mock，避免页面无法预览
-    // 仅将错误对象序列化为字符串，不暴露敏感响应数据
-    console.warn('Backend moment detail API not ready, using mock data:', err instanceof Error ? err.message : String(err))
-    return createMockMomentDetail(id)
+// 动态详情加载失败（拉黑/被屏蔽/账号封禁/不可见等）时展示的提示
+const showInfo = ref(false)
+const infoContent = ref('')
+
+// 拉黑（40301）、内容屏蔽（45101）、账号封禁（40303）、404 不可见等均属于"用户可理解的失败场景"，
+// 统一通过 InfoModal 提示，确认后返回上一页或首页，不再回退 mock 数据。
+function canGoBack(): boolean {
+  return typeof window !== 'undefined' && window.history.length > 1
+}
+
+function leaveMomentPage(): void {
+  if (canGoBack()) {
+    router.back()
+  } else {
+    router.replace('/')
   }
 }
 
-function createMockMomentDetail(id: string): MomentDetailData {
-  return {
-    id,
-    content: '喵星是什么网站？有猫吗？',
-    images: [],
-    author: {
-      id: 'u3',
-      name: '要乐奈',
-      handle: 'rana_mygo',
-      avatar: '',
-      verified: false,
-    },
-    publishTime: '2小时前',
-    stats: {
-      likes: 1680,
-      comments: 2499,
-      shares: 1000,
-    },
-    reactions: [
-      { emoji: '😄', count: 3 },
-    ],
-    isLiked: false,
-    isFollowing: false,
-    isSelf: false,
+const handleInfoConfirm = () => {
+  leaveMomentPage()
+}
+
+function failWithInfo(err: unknown, fallbackMsg: string): void {
+  let msg = fallbackMsg
+  let code: number | null = null
+  if (err instanceof ApiRequestError) {
+    msg = err.message || fallbackMsg
+    code = err.customCode
+  } else if (err instanceof Error) {
+    msg = err.message || fallbackMsg
   }
+  infoContent.value = withCode(msg, code)
+  showInfo.value = true
+}
+
+async function fetchMomentDetail(id: string): Promise<MomentDetailData> {
+  // 安全：对拼接进 URL 的 ID 做 encodeURIComponent，防止路径注入
+  return await api.getMomentDetail(id)
+}
+
+// 详情接口返回的 images 为文件 UUID 列表（原始存储 URL 不下发），
+// 逐张换取临时访问 URL；换取失败（如未公开分享）的图片静默跳过
+async function resolveDetailImages(moment: MomentDetailData): Promise<void> {
+  if (!moment.images || moment.images.length === 0) return
+  const urls: string[] = []
+  for (const uuid of moment.images) {
+    try {
+      const res = await api.getFileTempLink(uuid)
+      if (res.link?.url) {
+        urls.push(res.link.url)
+      }
+    } catch {
+      // 单张图片换取失败不影响其余图片展示
+    }
+  }
+  moment.images = urls
 }
 
 onMounted(async () => {
   if (!momentId) {
-    notifyError(null, '动态 ID 缺失')
+    failWithInfo(null, '动态 ID 缺失')
     return
   }
   loading.value = true
   commentsLoading.value = true
   try {
-    moment.value = await fetchMomentDetail(momentId)
+    const detail = await fetchMomentDetail(momentId)
+    await resolveDetailImages(detail)
+    moment.value = detail
   } catch (err) {
-    notifyError(err, '获取动态详情失败')
+    failWithInfo(err, '获取动态详情失败')
   } finally {
     loading.value = false
     commentsLoading.value = false
@@ -283,7 +305,7 @@ const handleUserClick = (userId: string) => {
 
     <!-- 中间内容区 -->
     <main class="flex-1 ml-64" :class="{ 'mr-80': isLoggedIn }">
-      <div v-if="loading || !moment" class="min-h-screen flex items-center justify-center">
+      <div v-if="loading" class="min-h-screen flex items-center justify-center">
         <div class="flex items-center gap-2 text-gray-400">
           <i class="fa-solid fa-circle-notch fa-spin"></i>
           <span>加载中...</span>
@@ -291,7 +313,7 @@ const handleUserClick = (userId: string) => {
       </div>
 
       <MomentDetail
-        v-else
+        v-else-if="moment"
         :moment="moment"
         :comments-loading="commentsLoading"
         @back="handleBack"
@@ -335,6 +357,15 @@ const handleUserClick = (userId: string) => {
       :choices="switchAccountChoices"
       :current-user="currentUser"
       @confirm="handleSwitchAccountConfirm"
+    />
+
+    <!-- 查看动态失败提示（拉黑/被屏蔽/账号封禁/不可见等），确认后返回上一页或首页 -->
+    <InfoModal
+      v-model:visible="showInfo"
+      title="查看动态失败"
+      :content="infoContent"
+      confirm-text="好的"
+      @confirm="handleInfoConfirm"
     />
   </div>
 </template>
