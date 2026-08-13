@@ -218,17 +218,23 @@ const handleBack = () => {
   router.back()
 }
 
-const handleFollow = (userId: string) => {
-  console.log('follow', userId)
-  if (moment.value) {
+const handleFollow = async (userId: string) => {
+  if (!moment.value) return
+  try {
+    await api.followUser(userId)
     moment.value.isFollowing = true
+  } catch (err) {
+    notifyError(err, '关注失败')
   }
 }
 
-const handleUnfollow = (userId: string) => {
-  console.log('unfollow', userId)
-  if (moment.value) {
+const handleUnfollow = async (userId: string) => {
+  if (!moment.value) return
+  try {
+    await api.unfollowUser(userId)
     moment.value.isFollowing = false
+  } catch (err) {
+    notifyError(err, '取消关注失败')
   }
 }
 

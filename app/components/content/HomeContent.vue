@@ -121,8 +121,6 @@ watch(feedRefreshKey, () => {
 })
 
 const emit = defineEmits<{
-  (e: 'moment-like', id: string): void
-  (e: 'moment-unlike', id: string): void
   (e: 'moment-comment', id: string): void
   (e: 'moment-share', id: string): void
   (e: 'moment-click', id: string): void
@@ -130,12 +128,30 @@ const emit = defineEmits<{
 }>()
 
 // 动态事件处理
-const handleMomentLike = (id: string) => {
-  emit('moment-like', id)
+const handleMomentLike = async (id: string) => {
+  try {
+    await api.likeMoment(id)
+    const m = moments.value.find((x) => x.id === id)
+    if (m) {
+      m.stats.likes++
+      m.isLiked = true
+    }
+  } catch (err) {
+    notifyError(err, '点赞失败')
+  }
 }
 
-const handleMomentUnlike = (id: string) => {
-  emit('moment-unlike', id)
+const handleMomentUnlike = async (id: string) => {
+  try {
+    await api.unlikeMoment(id)
+    const m = moments.value.find((x) => x.id === id)
+    if (m) {
+      m.stats.likes = Math.max(0, m.stats.likes - 1)
+      m.isLiked = false
+    }
+  } catch (err) {
+    notifyError(err, '取消点赞失败')
+  }
 }
 
 const handleMomentComment = (id: string) => {

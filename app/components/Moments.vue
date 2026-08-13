@@ -23,7 +23,6 @@ interface MomentData {
   }
   isLiked?: boolean
 }
-
 const props = defineProps<{
   moment: MomentData
 }>()
@@ -44,7 +43,6 @@ const { openViewer } = useImageViewer()
 const cardRef = useGlassTilt()
 
 // 本地状态
-const isLiked = ref(props.moment.isLiked || false)
 const showFullContent = ref(false)
 
 // 格式化数字
@@ -58,13 +56,12 @@ const formatNumber = (num: number): string => {
   return num.toString()
 }
 
-// 处理点赞
+// 处理点赞：状态由父级（真实接口）驱动，本地不乐观切换，失败时不会出现状态错乱
 const handleLike = () => {
-  isLiked.value = !isLiked.value
-  if (isLiked.value) {
-    emit('like', props.moment.id)
-  } else {
+  if (props.moment.isLiked) {
     emit('unlike', props.moment.id)
+  } else {
+    emit('like', props.moment.id)
   }
 }
 
@@ -211,11 +208,11 @@ const toggleExpand = () => {
         <!-- 点赞 -->
         <button
           class="flex items-center gap-1.5 text-gray-500 hover:text-pink-500 transition-colors group"
-          :class="{ 'text-pink-500': isLiked }"
+          :class="{ 'text-pink-500': moment.isLiked }"
           @click="handleLike"
         >
           <div class="w-8 h-8 rounded-full flex items-center justify-center group-hover:bg-pink-50 transition-colors">
-            <i :class="isLiked ? 'fa-solid fa-heart' : 'fa-regular fa-heart'" class="text-lg"></i>
+            <i :class="moment.isLiked ? 'fa-solid fa-heart' : 'fa-regular fa-heart'" class="text-lg"></i>
           </div>
           <span class="text-sm font-medium">{{ formatNumber(moment.stats.likes) }}</span>
         </button>

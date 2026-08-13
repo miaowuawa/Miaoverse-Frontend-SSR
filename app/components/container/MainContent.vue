@@ -36,14 +36,6 @@ const handleNavClick = (id: string) => {
 }
 
 // 首页内容事件处理（时间线动态）
-const handleHomeMomentLike = (id: string) => {
-  console.log('动态点赞:', id)
-}
-
-const handleHomeMomentUnlike = (id: string) => {
-  console.log('动态取消点赞:', id)
-}
-
 const handleHomeMomentComment = (id: string) => {
   console.log('动态评论:', id)
 }
@@ -132,8 +124,6 @@ const handleSettingClick = (settingId: string) => {
     <!-- 内容区域 -->
     <HomeContent
       v-if="activeNav === 'home'"
-      @moment-like="handleHomeMomentLike"
-      @moment-unlike="handleHomeMomentUnlike"
       @moment-comment="handleHomeMomentComment"
       @moment-share="handleHomeMomentShare"
       @moment-click="handleHomeMomentClick"

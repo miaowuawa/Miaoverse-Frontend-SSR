@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed } from 'vue'
 import { useImageViewer } from '~/composables/useImageViewer'
 
 /** 单个表情反应计数 */
@@ -55,13 +55,7 @@ const emit = defineEmits<{
 
 const { openViewer } = useImageViewer()
 
-const isLiked = ref(props.moment.isLiked || false)
 const sortBy = ref<'hot' | 'time'>('hot')
-
-// 同步 props 中的点赞状态（当父级通过接口刷新状态时使用）
-watch(() => props.moment.isLiked, (val) => {
-  isLiked.value = val || false
-})
 
 const displayHandle = computed(() => {
   const h = props.moment.author.handle
@@ -86,12 +80,12 @@ const handleFollow = () => {
   }
 }
 
+// 点赞：状态由父级（真实接口）驱动，本地不乐观切换，失败时不会出现状态错乱
 const handleLike = () => {
-  isLiked.value = !isLiked.value
-  if (isLiked.value) {
-    emit('like', props.moment.id)
-  } else {
+  if (props.moment.isLiked) {
     emit('unlike', props.moment.id)
+  } else {
+    emit('like', props.moment.id)
   }
 }
 
@@ -247,11 +241,11 @@ const handleUserClick = () => {
           <div class="flex items-center gap-6">
             <button
               class="flex items-center gap-1.5 text-gray-500 hover:text-pink-500 transition-colors group"
-              :class="{ 'text-pink-500': isLiked }"
+              :class="{ 'text-pink-500': moment.isLiked }"
               @click="handleLike"
             >
               <div class="w-8 h-8 rounded-full flex items-center justify-center group-hover:bg-pink-50 transition-colors">
-                <i :class="isLiked ? 'fa-solid fa-heart' : 'fa-regular fa-heart'" class="text-lg"></i>
+                <i :class="moment.isLiked ? 'fa-solid fa-heart' : 'fa-regular fa-heart'" class="text-lg"></i>
               </div>
               <span class="text-sm font-medium">{{ formatNumber(moment.stats.likes) }}</span>
             </button>

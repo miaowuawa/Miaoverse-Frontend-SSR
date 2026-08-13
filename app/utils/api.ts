@@ -242,20 +242,35 @@ export const api = {
   },
 
   // 给动态点赞：POST /api/v1/moment/likes（使用与现有后端一致的复数命名）
+  // 注意：moment_id 必须为数字，后端按 uint64 解析，字符串会返回 400
   likeMoment(id: string) {
     return request<{ code: number; msg: string; target: number; action: string }>('/api/v1/moment/likes', {
       method: 'POST',
-      body: { moment_id: id },
+      body: { moment_id: Number(id) },
     })
   },
 
-  // 取消动态点赞：POST /api/v1/moment/likes（幂等：后端按当前状态撤销）
-  // 注：后端目前 LikeMomentAndMeta/UnlikeMomentAndMeta 为两个 DAO 方法；这里预留与后端对接的占位，
-  //     当前阶段与 likeMoment 调用同一接口，待后端支持取消后再切换。
+  // 取消动态点赞：DELETE /api/v1/moment/likes（幂等：后端按当前状态撤销）
   unlikeMoment(id: string) {
     return request<{ code: number; msg: string; target: number; action: string }>('/api/v1/moment/likes', {
+      method: 'DELETE',
+      body: { moment_id: Number(id) },
+    })
+  },
+
+  // 关注用户：POST /api/v1/user/follows（幂等）。target 必须为数字，后端按 uint32 解析
+  followUser(target: string | number) {
+    return request<{ code: number; msg: string; target: number; action: string }>('/api/v1/user/follows', {
       method: 'POST',
-      body: { moment_id: id },
+      body: { target: Number(target) },
+    })
+  },
+
+  // 取消关注：DELETE /api/v1/user/follows（幂等）
+  unfollowUser(target: string | number) {
+    return request<{ code: number; msg: string; target: number; action: string }>('/api/v1/user/follows', {
+      method: 'DELETE',
+      body: { target: Number(target) },
     })
   },
 
