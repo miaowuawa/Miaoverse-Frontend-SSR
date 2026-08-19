@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import type { UserAccount, CurrentUser } from '~/types/user'
+import AvatarImg from '~/components/AvatarImg.vue'
 
 export interface MultipleAccountChoice {
   id: string
@@ -119,14 +120,10 @@ const confirmText = computed(() => (props.mode === 'switch' ? '切换' : '登入
         >
           <!-- 头像 -->
           <div class="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0 overflow-hidden">
-            <img
-              v-if="choice.avatar"
-              :src="choice.avatar"
-              alt=""
-              class="w-full h-full object-cover"
-            />
-            <i v-else class="fa-solid fa-user text-xl text-gray-500"></i>
-          </div>
+            <AvatarImg
+              :avatar-uuid="choice.avatar"
+              class="w-full h-full"
+            />          </div>
 
           <!-- 账号信息 -->
           <div class="flex-1 min-w-0">

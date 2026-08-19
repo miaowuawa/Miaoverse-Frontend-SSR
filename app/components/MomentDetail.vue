@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { useImageViewer } from '~/composables/useImageViewer'
+import AvatarImg from '~/components/AvatarImg.vue'
 
 /** 单个表情反应计数 */
 export interface ReactionItem {
@@ -141,15 +142,10 @@ const handleUserClick = () => {
             class="w-12 h-12 rounded-full overflow-hidden flex-shrink-0 cursor-pointer ring-2 ring-transparent hover:ring-lime-200 transition-all"
             @click="handleUserClick"
           >
-            <img
-              v-if="moment.author.avatar"
-              :src="moment.author.avatar"
-              alt=""
-              class="w-full h-full object-cover"
-            >
-            <div v-else class="w-full h-full bg-gradient-to-br from-pink-400 to-orange-400 flex items-center justify-center">
-              <i class="fa-solid fa-user text-white text-sm"></i>
-            </div>
+            <AvatarImg
+              :avatar-uuid="moment.author.avatar"
+              class="w-full h-full"
+            ></AvatarImg>
           </div>
 
           <div class="flex-1 min-w-0">

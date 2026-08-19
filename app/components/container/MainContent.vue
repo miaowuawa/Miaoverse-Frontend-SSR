@@ -49,7 +49,8 @@ const handleHomeMomentClick = (id: string) => {
 }
 
 const handleHomeUserClick = (userId: string) => {
-  console.log('点击用户:', userId)
+  // 首页时间线动态卡片点击用户：跳转个人主页（路径参数做 encodeURIComponent 防注入）
+  navigateTo(`/user/${encodeURIComponent(userId)}`)
 }
 
 // 推荐用户事件处理
@@ -62,7 +63,8 @@ const handleRecommendedUserUnfollow = (userId: string) => {
 }
 
 const handleRecommendedUserClick = (userId: string) => {
-  console.log('点击推荐用户:', userId)
+  // 推荐用户卡片点击：跳转个人主页（路径参数做 encodeURIComponent 防注入）
+  navigateTo(`/user/${encodeURIComponent(userId)}`)
 }
 
 // 话题事件处理

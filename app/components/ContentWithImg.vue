@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 import { useImageViewer } from '~/composables/useImageViewer'
 import { useGlassTilt } from '~/composables/useGlassTilt'
+import AvatarImg from '~/components/AvatarImg.vue'
 
 // 帖子数据接口
 interface PostData {
@@ -214,10 +215,7 @@ if (typeof window !== 'undefined') {
       <div class="flex items-center gap-2">
         <!-- 作者头像 -->
         <div class="w-7 h-7 rounded-full bg-gradient-to-br from-pink-400 to-orange-400 flex items-center justify-center overflow-hidden">
-          <img v-if="post.author.avatar" :src="post.author.avatar" class="w-full h-full object-cover">
-          <i v-else class="fa-solid fa-user text-white text-xs"></i>
-        </div>
-        
+          <AvatarImg :avatar-uuid="post.author.avatar" class="w-full h-full" />        
         <!-- 作者名 -->
         <span class="text-sm text-gray-700 font-medium">{{ post.author.name }}</span>
         

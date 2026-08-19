@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useGlassTilt } from '~/composables/useGlassTilt'
+import AvatarImg from '~/components/AvatarImg.vue'
 
 interface Props {
   user: {
@@ -48,12 +49,11 @@ const cardRef = useGlassTilt()
         v-if="user.avatar"
         class="w-14 h-14 rounded-full overflow-hidden"
       >
-        <img 
-          :src="user.avatar" 
+        <AvatarImg 
+          :avatar-uuid="user.avatar" 
           :alt="user.name"
-          class="w-full h-full object-cover"
-        />
-      </div>
+          class="w-full h-full"
+        />      </div>
       <div 
         v-else
         class="w-14 h-14 rounded-full bg-gray-900 flex items-center justify-center"

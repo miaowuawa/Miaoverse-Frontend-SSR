@@ -241,6 +241,21 @@ export const api = {
     return request<{ code: number; msg: string; link: { uuid: string; url: string; expires_at: string } }>(`/api/v1/user/files/${encodeURIComponent(uuid)}/shared-link`)
   },
 
+  // 获取任意用户头像文件 UUID：GET /api/v1/user/users/:uid/avatar
+  // 头像为公开可见文件，不受拉黑/屏蔽/账号封禁影响，无需登录
+  getUserAvatar(uid: string | number) {
+    return request<{ code: number; msg: string; avatar: { avatar_uuid: string } }>(`/api/v1/user/users/${encodeURIComponent(uid)}/avatar`)
+  },
+
+  // 设置当前登录用户头像：PUT /api/v1/user/avatar
+  // avatar_uuid 必须是本人 active 图片文件且公开（permission=0）
+  setAvatar(avatarUuid: string) {
+    return request<{ code: number; msg: string; avatar: { avatar_uuid: string } }>('/api/v1/user/avatar', {
+      method: 'PUT',
+      body: { avatar_uuid: avatarUuid },
+    })
+  },
+
   // 给动态点赞：POST /api/v1/moment/likes（使用与现有后端一致的复数命名）
   // 注意：moment_id 必须为数字，后端按 uint64 解析，字符串会返回 400
   likeMoment(id: string) {
@@ -320,5 +335,61 @@ export const api = {
       method: 'POST',
       body: payload,
     })
+  },
+
+  // 用户资料：GET /api/v1/user/users/:uid/info（需登录）
+  // 安全：对路径参数 uid 做 encodeURIComponent，防止特殊字符破坏 URL 路径语义
+  getUserInfo(uid: string | number) {
+    return request<{ code: number; msg: string; user: ServerUserPayload }>(`/api/v1/user/users/${encodeURIComponent(uid)}/info`)
+  },
+
+  // 用户关系列表：GET /api/v1/user/users/:uid/followers 或 /following
+  // 这里只取 count，limit=1 减少数据传输
+  getUserFollowers(uid: string | number, offset = 0, limit = 1) {
+    const query = new URLSearchParams({ offset: String(offset), limit: String(limit) })
+    return request<{ code: number; msg: string; count: number; users: ServerUserPayload[] }>(`/api/v1/user/users/${encodeURIComponent(uid)}/followers?${query.toString()}`)
+  },
+
+  getUserFollowing(uid: string | number, offset = 0, limit = 1) {
+    const query = new URLSearchParams({ offset: String(offset), limit: String(limit) })
+    return request<{ code: number; msg: string; count: number; users: ServerUserPayload[] }>(`/api/v1/user/users/${encodeURIComponent(uid)}/following?${query.toString()}`)
+  },
+
+  // 用户内容列表：GET /api/v1/user/users/:uid/contents?category=&offset=&limit=（需登录）
+  // 返回内容 ID/类型/互动计数（不含正文），正文需再调详情接口获取
+  getUserContents(uid: string | number, category: 'moment' | 'article' | 'novel' = 'moment', offset = 0, limit = 20) {
+    const query = new URLSearchParams({
+      category,
+      offset: String(offset),
+      limit: String(limit),
+    })
+    return request<{ code: number; msg: string; count: number; contents: { id: number; type: string; comment: number; like: number; chapter_count: number }[] }>(`/api/v1/user/users/${encodeURIComponent(uid)}/contents?${query.toString()}`)
+  },
+
+  // 用户内容数量：GET /api/v1/user/users/:uid/contents/count（需登录）
+  getUserContentsCount(uid: string | number) {
+    return request<{ code: number; msg: string; count: number }>(`/api/v1/user/users/${encodeURIComponent(uid)}/contents/count`)
+  },
+
+  // 发表动态评论：POST /api/v1/comment/moments（需登录）
+  // moment_id 必须为数字，后端按 uint64 解析；content 最大 1000 字（consts.MaxCommentLen）
+  createMomentComment(momentId: string | number, content: string) {
+    return request<{ code: number; msg: string; comment: { id: number; user_id: number; moment_id: number; content: string; status: number; created_at: string } }>('/api/v1/comment/moments', {
+      method: 'POST',
+      body: { moment_id: Number(momentId), content },
+    })
+  },
+
+  // 用户内容流：GET /api/v1/feeds/user/:uid?content=&sort=&offset=&limit=
+  // 支持本人查看（后端 AllowSelf），返回完整 feed 条目（含正文/作者/互动计数）。
+  // 安全：对路径参数 uid 做 encodeURIComponent
+  getUserFeed(uid: string | number, content: 'moment' | 'article' | 'novel' | 'all' = 'all', sort: 'time' | 'hot' = 'time', offset = 0, limit = 20) {
+    const query = new URLSearchParams({
+      content,
+      sort,
+      offset: String(offset),
+      limit: String(limit),
+    })
+    return request<{ code: number; msg: string; count: number; items: ServerFeedItem[] }>(`/api/v1/feeds/user/${encodeURIComponent(uid)}?${query.toString()}`)
   },
 }

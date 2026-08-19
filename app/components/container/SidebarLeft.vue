@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 import type { CurrentUser } from '~/types/user'
 import type { MenuItem, ParsedMenu } from '~/types/menu'
 import AccountMenu from '~/components/user/AccountMenu.vue'
+import AvatarImg from '~/components/AvatarImg.vue'
 
 // 导航项接口
 interface NavItem {
@@ -187,8 +188,11 @@ const handleSignIn = () => {
         :class="{ 'bg-lime-50': menuVisible }"
         @click="toggleMenu"
       >
-        <div class="w-9 h-9 rounded-full bg-gradient-to-br from-lime-400 to-lime-500 flex items-center justify-center flex-shrink-0">
-          <i class="fa-solid fa-user text-white text-sm"></i>
+        <div class="w-9 h-9 rounded-full bg-gradient-to-br from-lime-400 to-lime-500 flex items-center justify-center flex-shrink-0 overflow-hidden">
+          <AvatarImg
+            :avatar-uuid="effectiveUser?.avatar"
+            class="w-full h-full"
+          ></AvatarImg>
         </div>
         <div class="flex-1 text-left min-w-0">
           <p class="text-sm font-medium text-gray-800 truncate">{{ effectiveUser?.displayName || '用户' }}</p>

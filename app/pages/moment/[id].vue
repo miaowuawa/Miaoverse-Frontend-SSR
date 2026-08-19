@@ -8,6 +8,7 @@ import AccountSelectorModal from '~/components/modal/AccountSelectorModal.vue'
 import SearchModal from '~/components/modal/SearchModal.vue'
 import MomentDetail, { type MomentDetailData } from '~/components/MomentDetail.vue'
 import InfoModal from '~/components/modal/InfoModal.vue'
+import CommentModal from '~/components/modal/CommentModal.vue'
 import { api, ApiRequestError } from '~/utils/api'
 import { notifyError, withCode } from '~/utils/notify'
 import type { MenuItem, ServerMenuPayload } from '~/types/menu'
@@ -238,31 +239,53 @@ const handleUnfollow = async (userId: string) => {
   }
 }
 
+// 点赞请求进行中标记：后端点赞幂等，快速连点时避免前端计数虚高
+const likePending = ref(false)
+
 const handleLike = async (id: string) => {
-  if (!moment.value) return
+  if (!moment.value || likePending.value) return
+  likePending.value = true
   try {
     await api.likeMoment(id)
-    moment.value.stats.likes++
-    moment.value.isLiked = true
+    if (moment.value && !moment.value.isLiked) {
+      moment.value.stats.likes++
+      moment.value.isLiked = true
+    }
   } catch (err) {
     notifyError(err, '点赞失败')
+  } finally {
+    likePending.value = false
   }
 }
 
 const handleUnlike = async (id: string) => {
-  if (!moment.value) return
+  if (!moment.value || likePending.value) return
+  likePending.value = true
   try {
     await api.unlikeMoment(id)
-    moment.value.stats.likes = Math.max(0, moment.value.stats.likes - 1)
-    moment.value.isLiked = false
+    if (moment.value && moment.value.isLiked) {
+      moment.value.stats.likes = Math.max(0, moment.value.stats.likes - 1)
+      moment.value.isLiked = false
+    }
   } catch (err) {
     notifyError(err, '取消点赞失败')
+  } finally {
+    likePending.value = false
   }
 }
 
+// 评论输入弹窗
+const showCommentModal = ref(false)
+
 const handleComment = (id: string) => {
-  // TODO: 聚焦评论输入框或打开评论弹窗
-  console.log('comment', id)
+  showCommentModal.value = true
+}
+
+// 评论发送成功：本地评论计数 +1，并刷新详情中的评论数显示
+const handleCommentSent = () => {
+  if (moment.value) {
+    moment.value.stats.comments++
+  }
 }
 
 const handleShare = (id: string) => {
@@ -372,6 +395,14 @@ const handleUserClick = (userId: string) => {
       :content="infoContent"
       confirm-text="好的"
       @confirm="handleInfoConfirm"
+    />
+
+    <!-- 评论输入弹窗：点击动态评论按钮后从底部滑出 -->
+    <CommentModal
+      v-model:visible="showCommentModal"
+      :moment-id="momentId"
+      :current-user="currentUser"
+      @sent="handleCommentSent"
     />
   </div>
 </template>

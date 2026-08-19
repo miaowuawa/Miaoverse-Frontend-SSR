@@ -127,30 +127,42 @@ const emit = defineEmits<{
   (e: 'user-click', userId: string): void
 }>()
 
+// 点赞请求进行中集合（非响应式，仅作防抖标记）：
+// 后端点赞幂等（重复点赞不计多次），快速连点时若每次都 ++ 会使前端计数虚高，故进行中忽略重复点击
+const likePending = new Set<string>()
+
 // 动态事件处理
 const handleMomentLike = async (id: string) => {
+  if (likePending.has(id)) return
+  likePending.add(id)
   try {
     await api.likeMoment(id)
     const m = moments.value.find((x) => x.id === id)
-    if (m) {
+    if (m && !m.isLiked) {
       m.stats.likes++
       m.isLiked = true
     }
   } catch (err) {
     notifyError(err, '点赞失败')
+  } finally {
+    likePending.delete(id)
   }
 }
 
 const handleMomentUnlike = async (id: string) => {
+  if (likePending.has(id)) return
+  likePending.add(id)
   try {
     await api.unlikeMoment(id)
     const m = moments.value.find((x) => x.id === id)
-    if (m) {
+    if (m && m.isLiked) {
       m.stats.likes = Math.max(0, m.stats.likes - 1)
       m.isLiked = false
     }
   } catch (err) {
     notifyError(err, '取消点赞失败')
+  } finally {
+    likePending.delete(id)
   }
 }
 
