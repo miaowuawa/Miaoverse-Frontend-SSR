@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import { useImageViewer } from '~/composables/useImageViewer'
 import { useGlassTilt } from '~/composables/useGlassTilt'
 import AvatarImg from '~/components/AvatarImg.vue'
+import { formatAbsoluteTime, formatRelativeTime } from '~/utils/time'
 
 // 动态数据接口
 interface MomentData {
@@ -128,7 +129,8 @@ const toggleExpand = () => {
           <i v-if="moment.author.verified" class="fa-solid fa-circle-check text-blue-500 text-xs"></i>
         </div>
         <div class="flex items-center gap-2 text-xs text-gray-400 mt-0.5">
-          <span>{{ moment.publishTime }}</span>
+          <!-- 人性化时间（悬停显示精确日期时间） -->
+          <span :title="formatAbsoluteTime(moment.publishTime)">{{ formatRelativeTime(moment.publishTime) || moment.publishTime }}</span>
           <span v-if="moment.location" class="flex items-center gap-1">
             <i class="fa-solid fa-location-dot text-gray-300"></i>
             {{ moment.location }}

@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import { useImageViewer } from '~/composables/useImageViewer'
 import { useGlassTilt } from '~/composables/useGlassTilt'
 import AvatarImg from '~/components/AvatarImg.vue'
+import { formatAbsoluteTime, formatRelativeTime } from '~/utils/time'
 
 // 帖子数据接口
 interface PostData {
@@ -235,8 +236,8 @@ if (typeof window !== 'undefined') {
           已关注
         </button>
         
-        <!-- 时间 -->
-        <span class="text-xs text-gray-400 ml-2">{{ post.publishTime }} ({{ post.timeLabel }})</span>
+        <!-- 时间（人性化时间，悬停显示精确日期时间） -->
+        <span class="text-xs text-gray-400 ml-2" :title="formatAbsoluteTime(post.publishTime)">{{ formatRelativeTime(post.publishTime) || post.publishTime }}</span>
       </div>
 
       <!-- 右侧：操作按钮 -->

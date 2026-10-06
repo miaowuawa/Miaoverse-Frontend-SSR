@@ -31,23 +31,7 @@ const moments = ref<MomentData[]>([])
 const loading = ref(false)
 const feedLoaded = ref(false)
 
-// 后端时间（ISO 字符串）转展示格式：今天显示时分，其余显示 "YYYY/MM/DD"
-function formatPublishTime(iso?: string): string {
-  if (!iso) return ''
-  const date = new Date(iso)
-  if (Number.isNaN(date.getTime())) return ''
-  const now = new Date()
-  const sameDay = date.getFullYear() === now.getFullYear()
-    && date.getMonth() === now.getMonth()
-    && date.getDate() === now.getDate()
-  if (sameDay) {
-    return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
-  }
-  const y = date.getFullYear()
-  const m = String(date.getMonth() + 1).padStart(2, '0')
-  const d = String(date.getDate()).padStart(2, '0')
-  return `${y}/${m}/${d}`
-}
+// 后端时间（ISO 字符串）原样传给卡片组件，展示时统一人性化格式化（见 utils/time.ts）
 
 // 后端 feed 条目 → 首页动态卡片数据（仅取动态类型）
 function normalizeFeedMoment(item: ServerFeedItem): MomentData | null {
@@ -64,7 +48,7 @@ function normalizeFeedMoment(item: ServerFeedItem): MomentData | null {
       avatar: authorRaw?.avatar ?? undefined,
       verified: false,
     },
-    publishTime: formatPublishTime(item.created_at),
+    publishTime: item.created_at ?? '',
     stats: {
       likes: item.stats?.likes ?? 0,
       comments: item.stats?.comments ?? 0,

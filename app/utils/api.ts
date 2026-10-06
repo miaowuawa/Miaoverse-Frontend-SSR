@@ -2,10 +2,148 @@
 // 浏览器与 SSR 均同源请求，session cookie（mwu_sess_id）自动随请求携带。
 import type { ServerUserPayload } from '~/types/user'
 import type { MomentDetailData } from '~/components/MomentDetail.vue'
+import type { CommentAuthor, CommentItemData, CommentStickerInfo, ReplyItemData } from '~/types/comment'
 
 export interface ApiErrorBody {
   code: number
   msg: string
+}
+
+/** 评论作者（后端 resp.CommentInfo.author，为 user 表字段） */
+export interface ServerCommentAuthor extends ServerUserPayload {
+  bio?: string
+  gender?: number
+  region?: number
+}
+
+/** 评论内嵌贴纸展示信息（后端 resp.CommentSticker） */
+export interface ServerCommentSticker {
+  uuid: string
+  file_uuid: string
+  name: string
+  hidden: boolean
+}
+
+/** 评论信息（后端 resp.CommentInfo） */
+export interface ServerCommentInfo {
+  id: number
+  user_id: number
+  moment_id: number
+  content: string
+  status: number
+  created_at: string
+  author?: ServerCommentAuthor
+  likes?: number
+  is_liked?: boolean
+  /** 楼中楼回复总数（含全部子孙回复） */
+  reply_count?: number
+  /** 评论内嵌贴纸展示信息列表（按 content 中标记出现顺序，一条评论最多 25 张） */
+  stickers?: ServerCommentSticker[]
+}
+
+/** 楼中楼回复信息（后端 resp.ReplyInfo） */
+export interface ServerReplyInfo {
+  id: number
+  user_id: number
+  moment_id: number
+  /** 被回复的评论 id（楼中楼首条评论或楼中楼内任意回复） */
+  reply_to_id: number
+  /** 被回复的评论作者 id */
+  reply_to_user_id: number
+  content: string
+  status: number
+  created_at: string
+  author?: ServerCommentAuthor
+  likes?: number
+  is_liked?: boolean
+  /** 回复内嵌贴纸展示信息列表（语义与评论一致） */
+  stickers?: ServerCommentSticker[]
+}
+
+/** 楼中楼完整对话（后端 resp.ConversationInfo） */
+export interface ServerConversationInfo {
+  root: ServerCommentInfo
+  count: number
+  replies: ServerReplyInfo[]
+}
+
+/** 贴纸信息（后端 resp.StickerInfo） */
+export interface ServerStickerInfo {
+  uuid: string
+  file_uuid: string
+  pack_id: number
+  name: string
+  source: number
+  top: number
+  created_at: string
+}
+
+/** 贴纸包信息（后端 resp.StickerPackInfo） */
+export interface ServerStickerPackInfo {
+  id: number
+  uuid: string
+  user_id: number
+  name: string
+  description: string
+  banned: boolean
+  sticker_count: number
+  is_favorite: boolean
+  created_at: string
+}
+
+/** 贴纸展示信息列表 → 前端展示数据 */
+function normalizeStickers(list?: ServerCommentSticker[] | null): CommentStickerInfo[] {
+  return (list ?? [])
+    .filter((s) => !!s?.uuid)
+    .map((s) => ({
+      uuid: s.uuid,
+      fileUuid: s.file_uuid,
+      name: s.name,
+      hidden: !!s.hidden,
+    }))
+}
+
+/** 评论作者 → 前端展示数据 */
+function normalizeCommentAuthor(raw: ServerCommentInfo | ServerReplyInfo): CommentAuthor {
+  const authorRaw = raw.author
+  return {
+    id: authorRaw?.id ? String(authorRaw.id) : String(raw.user_id ?? ''),
+    name: authorRaw?.display_name || authorRaw?.displayName || authorRaw?.nickname || '用户',
+    handle: authorRaw?.handle || authorRaw?.username || '',
+    avatar: authorRaw?.avatar ?? null,
+  }
+}
+
+/** 后端评论 → 评论展示数据（贴纸标记 [sticker:<uuid>] 保留在 content 中随文字穿插展示） */
+export function normalizeComment(raw: ServerCommentInfo): CommentItemData {
+  return {
+    id: String(raw.id),
+    content: raw.content ?? '',
+    createdAt: raw.created_at ?? '',
+    likes: raw.likes ?? 0,
+    isLiked: !!raw.is_liked,
+    author: normalizeCommentAuthor(raw),
+    stickers: normalizeStickers(raw.stickers),
+    replyCount: raw.reply_count ?? 0,
+    replies: null,
+    repliesLoading: false,
+    conversationLoaded: false,
+  }
+}
+
+/** 后端回复 → 回复展示数据（楼中楼，含被回复对象信息） */
+export function normalizeReply(raw: ServerReplyInfo): ReplyItemData {
+  return {
+    id: String(raw.id),
+    content: raw.content ?? '',
+    createdAt: raw.created_at ?? '',
+    likes: raw.likes ?? 0,
+    isLiked: !!raw.is_liked,
+    author: normalizeCommentAuthor(raw),
+    stickers: normalizeStickers(raw.stickers),
+    replyToId: String(raw.reply_to_id ?? ''),
+    replyToUserId: String(raw.reply_to_user_id ?? ''),
+  }
 }
 
 export interface ReactionItem {
@@ -372,11 +510,143 @@ export const api = {
   },
 
   // 发表动态评论：POST /api/v1/comment/moments（需登录）
-  // moment_id 必须为数字，后端按 uint64 解析；content 最大 1000 字（consts.MaxCommentLen）
+  // moment_id 必须为数字，后端按 uint64 解析；正文最大 1000 字（不含贴纸标记），
+  // 可携带最多 25 个贴纸内嵌标记 [sticker:<uuid>] 随文字穿插展示（一条评论最多 25 张贴纸）
   createMomentComment(momentId: string | number, content: string) {
-    return request<{ code: number; msg: string; comment: { id: number; user_id: number; moment_id: number; content: string; status: number; created_at: string } }>('/api/v1/comment/moments', {
+    return request<{ code: number; msg: string; comment: ServerCommentInfo }>('/api/v1/comment/moments', {
       method: 'POST',
       body: { moment_id: Number(momentId), content },
+    })
+  },
+
+  // 回复评论（楼中楼）：POST /api/v1/comment/moments/:id/replies（需登录；:id 为被回复的评论 id）
+  // 被回复对象既可以是楼中楼首条评论，也可以是楼中楼内任意回复（回复他人的回复），
+  // 新回复归入以楼中楼首条评论为根的同一对话链；贴纸规则与评论一致（最多 25 张）
+  createCommentReply(commentId: string | number, content: string) {
+    return request<{ code: number; msg: string; reply: ServerReplyInfo }>(
+      `/api/v1/comment/moments/${encodeURIComponent(String(commentId))}/replies`,
+      { method: 'POST', body: { content } }
+    )
+  },
+
+  // 动态评论列表：GET /api/v1/comment/moments/:id?offset=&limit=&sort=hot|time（需登录）
+  // 评论 content 中保留贴纸标记，stickers 为贴纸展示信息（hidden=true 时提示「部分贴纸未显示」），
+  // reply_count 为该评论楼中楼下的回复总数
+  getMomentComments(momentId: string | number, offset = 0, limit = 20, sort: 'hot' | 'time' = 'hot') {
+    const query = new URLSearchParams({ offset: String(offset), limit: String(limit), sort })
+    return request<{ code: number; msg: string; count: number; comments: ServerCommentInfo[] }>(
+      `/api/v1/comment/moments/${encodeURIComponent(String(momentId))}?${query.toString()}`
+    )
+  },
+
+  // 楼中楼完整对话：GET /api/v1/comment/moments/:id/conversation（需登录；:id 为楼中楼首条评论 id）
+  // 返回首条评论（root）及其全部子孙回复（replies，扁平列表按时间正序）；count 为该链全部回复总数
+  getCommentConversation(commentId: string | number, offset = 0, limit = 100) {
+    const query = new URLSearchParams({ offset: String(offset), limit: String(limit) })
+    return request<{ code: number; msg: string; conversation: ServerConversationInfo }>(
+      `/api/v1/comment/moments/${encodeURIComponent(String(commentId))}/conversation?${query.toString()}`
+    )
+  },
+
+  // 给评论点赞 / 取消点赞（幂等）：POST/DELETE /api/v1/comment/likes（需登录）
+  likeComment(commentId: string | number) {
+    return request<{ code: number; msg: string; target: number; action: string }>('/api/v1/comment/likes', {
+      method: 'POST',
+      body: { comment_id: Number(commentId) },
+    })
+  },
+
+  unlikeComment(commentId: string | number) {
+    return request<{ code: number; msg: string; target: number; action: string }>('/api/v1/comment/likes', {
+      method: 'DELETE',
+      body: { comment_id: Number(commentId) },
+    })
+  },
+
+  // ===== 贴纸（需登录且绑定手机号）=====
+
+  // 上传贴纸：POST /api/v1/stickers（multipart/form-data，file + 可选 name）
+  // 仅支持 jpg/png/gif/webp（服务端按文件头魔数嗅探校验），单张最大 10MB
+  async uploadSticker(file: File, name?: string): Promise<ServerStickerInfo> {
+    const form = new FormData()
+    form.append('file', file)
+    if (name) form.append('name', name)
+    let res
+    try {
+      res = await $fetch.raw<{ code: number; msg: string; sticker: ServerStickerInfo }>('/api/v1/stickers', {
+        method: 'POST',
+        body: form,
+        ignoreResponseError: true,
+      })
+    } catch (err: any) {
+      throw parseApiError(err, '网络异常，请稍后重试')
+    }
+    const data = res._data ?? {}
+    if (res.status !== 201) {
+      throw new ApiRequestError(res.status, data.code ?? res.status, data.msg ?? '上传失败')
+    }
+    return data.sticker
+  },
+
+  // 我的贴纸收藏夹（我上传的 + 收藏的，置顶优先）：GET /api/v1/stickers/collection
+  getStickerCollection(offset = 0, limit = 100) {
+    const query = new URLSearchParams({ offset: String(offset), limit: String(limit) })
+    return request<{ code: number; msg: string; count: number; stickers: ServerStickerInfo[] }>(
+      `/api/v1/stickers/collection?${query.toString()}`
+    )
+  },
+
+  // 添加他人贴纸到收藏夹（幂等，收藏上限 500）：POST /api/v1/stickers/collection
+  favoriteSticker(stickerUuid: string) {
+    return request<{ code: number; msg: string; sticker: ServerStickerInfo }>('/api/v1/stickers/collection', {
+      method: 'POST',
+      body: { sticker_uuid: stickerUuid },
+    })
+  },
+
+  // 从收藏夹移除贴纸（幂等）：DELETE /api/v1/stickers/collection
+  unfavoriteSticker(stickerUuid: string) {
+    return request<{ code: number; msg: string; sticker: ServerStickerInfo }>('/api/v1/stickers/collection', {
+      method: 'DELETE',
+      body: { sticker_uuid: stickerUuid },
+    })
+  },
+
+  // 设置/取消收藏夹贴纸置顶：PATCH /api/v1/stickers/:uuid/top（top: 1 置顶 / 0 取消）
+  setStickerTop(stickerUuid: string, top: 0 | 1) {
+    return request<{ code: number; msg: string; sticker: ServerStickerInfo }>(
+      `/api/v1/stickers/${encodeURIComponent(stickerUuid)}/top`,
+      { method: 'PATCH', body: { top } }
+    )
+  },
+
+  // 贴纸包列表：GET /api/v1/stickers/packs?filter=all|favorite（用户收藏夹与其他贴纸包分开显示）
+  getStickerPacks(offset = 0, limit = 20, filter: 'all' | 'favorite' = 'all') {
+    const query = new URLSearchParams({ offset: String(offset), limit: String(limit), filter })
+    return request<{ code: number; msg: string; count: number; packs: ServerStickerPackInfo[] }>(
+      `/api/v1/stickers/packs?${query.toString()}`
+    )
+  },
+
+  // 贴纸包详情（含包内贴纸）：GET /api/v1/stickers/packs/:id
+  getStickerPackDetail(packId: string | number) {
+    return request<{ code: number; msg: string; pack: ServerStickerPackInfo; stickers: ServerStickerInfo[] }>(
+      `/api/v1/stickers/packs/${encodeURIComponent(String(packId))}`
+    )
+  },
+
+  // 收藏/取消收藏整个贴纸包（幂等，收藏后包内容更新自动同步）：POST/DELETE /api/v1/stickers/packs/favorites
+  favoriteStickerPack(packId: string | number) {
+    return request<{ code: number; msg: string; pack: ServerStickerPackInfo }>('/api/v1/stickers/packs/favorites', {
+      method: 'POST',
+      body: { pack_id: Number(packId) },
+    })
+  },
+
+  unfavoriteStickerPack(packId: string | number) {
+    return request<{ code: number; msg: string; pack: ServerStickerPackInfo }>('/api/v1/stickers/packs/favorites', {
+      method: 'DELETE',
+      body: { pack_id: Number(packId) },
     })
   },
 

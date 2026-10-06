@@ -9,10 +9,11 @@ import SearchModal from '~/components/modal/SearchModal.vue'
 import MomentDetail, { type MomentDetailData } from '~/components/MomentDetail.vue'
 import InfoModal from '~/components/modal/InfoModal.vue'
 import CommentModal from '~/components/modal/CommentModal.vue'
-import { api, ApiRequestError } from '~/utils/api'
+import { api, ApiRequestError, normalizeComment, normalizeReply } from '~/utils/api'
 import { notifyError, withCode } from '~/utils/notify'
 import type { MenuItem, ServerMenuPayload } from '~/types/menu'
 import type { MultipleAccountChoice } from '~/types/user'
+import type { CommentItemData, ReplyItemData } from '~/types/comment'
 
 const route = useRoute()
 const router = useRouter()
@@ -26,7 +27,12 @@ useHead({
 // SSR 阶段不请求详情，避免服务端与客户端状态不一致
 const moment = ref<MomentDetailData | null>(null)
 const loading = ref(false)
+
+// 评论列表（一级评论，含贴纸穿插展示信息）
+const comments = ref<CommentItemData[]>([])
+const commentsTotal = ref(0)
 const commentsLoading = ref(false)
+const commentSort = ref<'hot' | 'time'>('hot')
 
 // 动态详情加载失败（拉黑/被屏蔽/账号封禁/不可见等）时展示的提示
 const showInfo = ref(false)
@@ -86,13 +92,30 @@ async function resolveDetailImages(moment: MomentDetailData): Promise<void> {
   moment.images = urls
 }
 
+// 拉取评论列表（一级评论）。未登录（401）时静默降级为空列表，评论区显示占位
+async function fetchComments(append = false): Promise<void> {
+  if (!momentId) return
+  commentsLoading.value = true
+  try {
+    const res = await api.getMomentComments(momentId, append ? comments.value.length : 0, 20, commentSort.value)
+    const items = (res.comments ?? []).map(normalizeComment)
+    comments.value = append ? [...comments.value, ...items] : items
+    commentsTotal.value = res.count ?? comments.value.length
+  } catch (err) {
+    if (!(err instanceof ApiRequestError && err.httpStatus === 401)) {
+      notifyError(err, '获取评论失败')
+    }
+  } finally {
+    commentsLoading.value = false
+  }
+}
+
 onMounted(async () => {
   if (!momentId) {
     failWithInfo(null, '动态 ID 缺失')
     return
   }
   loading.value = true
-  commentsLoading.value = true
   try {
     const detail = await fetchMomentDetail(momentId)
     await resolveDetailImages(detail)
@@ -101,8 +124,8 @@ onMounted(async () => {
     failWithInfo(err, '获取动态详情失败')
   } finally {
     loading.value = false
-    commentsLoading.value = false
   }
+  fetchComments()
 })
 
 // ========== 与首页一致的布局/登录/搜索/发布/账号切换状态 ==========
@@ -276,16 +299,143 @@ const handleUnlike = async (id: string) => {
 
 // 评论输入弹窗
 const showCommentModal = ref(false)
+// 回复目标（楼中楼）：null=对动态发表评论；否则回复某条评论/某条回复
+const replyTarget = ref<{ rootId: string; targetId: string; targetName: string } | null>(null)
 
 const handleComment = (id: string) => {
+  replyTarget.value = null
   showCommentModal.value = true
 }
 
-// 评论发送成功：本地评论计数 +1，并刷新详情中的评论数显示
-const handleCommentSent = () => {
+// 回复评论/回复他人的回复：打开回复输入弹窗
+const handleReply = (payload: { rootId: string; targetId: string; targetName: string }) => {
+  replyTarget.value = payload
+  showCommentModal.value = true
+}
+
+// 楼中楼首次展开：加载该链前若干条回复
+const REPLY_PREVIEW_SIZE = 10
+
+const handleExpandReplies = async (rootId: string) => {
+  const comment = comments.value.find((c) => c.id === rootId)
+  if (!comment || comment.repliesLoading || comment.replies !== null) return
+  comment.repliesLoading = true
+  try {
+    const res = await api.getCommentConversation(rootId, 0, REPLY_PREVIEW_SIZE)
+    const replies = (res.conversation.replies ?? []).map(normalizeReply)
+    comment.replies = replies
+    comment.replyCount = Math.max(comment.replyCount, res.conversation.count ?? replies.length)
+    if (replies.length >= comment.replyCount) {
+      comment.conversationLoaded = true
+    }
+  } catch (err) {
+    notifyError(err, '获取回复失败')
+  } finally {
+    comment.repliesLoading = false
+  }
+}
+
+// 查看完整对话：一键加载该链下全部评论回复（分页拉取直到取完）
+const handleShowConversation = async (rootId: string) => {
+  const comment = comments.value.find((c) => c.id === rootId)
+  if (!comment || comment.repliesLoading) return
+  comment.repliesLoading = true
+  try {
+    const replies: ReplyItemData[] = []
+    let offset = 0
+    let total = 0
+    for (;;) {
+      const res = await api.getCommentConversation(rootId, offset, 100)
+      total = res.conversation.count ?? 0
+      const page = (res.conversation.replies ?? []).map(normalizeReply)
+      replies.push(...page)
+      if (page.length === 0 || replies.length >= total) break
+      offset += page.length
+    }
+    comment.replies = replies
+    comment.replyCount = Math.max(comment.replyCount, total)
+    comment.conversationLoaded = true
+  } catch (err) {
+    notifyError(err, '获取完整对话失败')
+  } finally {
+    comment.repliesLoading = false
+  }
+}
+
+// 评论/回复发送成功：评论刷新列表并计数 +1；回复插入对应楼中楼并回复数 +1
+const handleCommentSent = (payload?: { rootId: string; reply: ReplyItemData }) => {
+  if (payload?.rootId) {
+    const comment = comments.value.find((c) => c.id === payload.rootId)
+    if (comment) {
+      comment.replyCount++
+      if (comment.replies) {
+        comment.replies.push(payload.reply)
+      }
+    }
+    return
+  }
   if (moment.value) {
     moment.value.stats.comments++
   }
+  fetchComments()
+}
+
+// 楼中楼回复点赞/取消点赞（后端幂等）
+const handleLikeReply = async (payload: { rootId: string; replyId: string }) => {
+  try {
+    await api.likeComment(payload.replyId)
+    const reply = comments.value.find((c) => c.id === payload.rootId)?.replies?.find((r) => r.id === payload.replyId)
+    if (reply && !reply.isLiked) {
+      reply.likes++
+      reply.isLiked = true
+    }
+  } catch (err) {
+    notifyError(err, '点赞失败')
+  }
+}
+
+const handleUnlikeReply = async (payload: { rootId: string; replyId: string }) => {
+  try {
+    await api.unlikeComment(payload.replyId)
+    const reply = comments.value.find((c) => c.id === payload.rootId)?.replies?.find((r) => r.id === payload.replyId)
+    if (reply && reply.isLiked) {
+      reply.likes = Math.max(0, reply.likes - 1)
+      reply.isLiked = false
+    }
+  } catch (err) {
+    notifyError(err, '取消点赞失败')
+  }
+}
+
+// 评论点赞/取消点赞（后端幂等）
+const handleLikeComment = async (id: string) => {
+  try {
+    await api.likeComment(id)
+    const found = comments.value.find((c) => c.id === id)
+    if (found && !found.isLiked) {
+      found.likes++
+      found.isLiked = true
+    }
+  } catch (err) {
+    notifyError(err, '点赞失败')
+  }
+}
+
+const handleUnlikeComment = async (id: string) => {
+  try {
+    await api.unlikeComment(id)
+    const found = comments.value.find((c) => c.id === id)
+    if (found && found.isLiked) {
+      found.likes = Math.max(0, found.likes - 1)
+      found.isLiked = false
+    }
+  } catch (err) {
+    notifyError(err, '取消点赞失败')
+  }
+}
+
+const handleLoadMoreComments = () => {
+  fetchComments(true)
 }
 
 const handleShare = (id: string) => {
@@ -309,8 +459,10 @@ const handleReaction = async (payload: { id: string; emoji: string }) => {
 }
 
 const handleSortChange = (sort: 'hot' | 'time') => {
-  // TODO: 接入真实评论列表接口并传递排序参数
-  console.log('sort comments by', sort)
+  if (commentSort.value === sort) return
+  commentSort.value = sort
+  comments.value = []
+  fetchComments()
 }
 
 const handleUserClick = (userId: string) => {
@@ -344,6 +496,8 @@ const handleUserClick = (userId: string) => {
       <MomentDetail
         v-else-if="moment"
         :moment="moment"
+        :comments="comments"
+        :comments-total="commentsTotal"
         :comments-loading="commentsLoading"
         @back="handleBack"
         @search="handleSearch"
@@ -356,6 +510,14 @@ const handleUserClick = (userId: string) => {
         @reaction="handleReaction"
         @sort-change="handleSortChange"
         @user-click="handleUserClick"
+        @like-comment="handleLikeComment"
+        @unlike-comment="handleUnlikeComment"
+        @load-more-comments="handleLoadMoreComments"
+        @reply="handleReply"
+        @like-reply="handleLikeReply"
+        @unlike-reply="handleUnlikeReply"
+        @expand-replies="handleExpandReplies"
+        @show-conversation="handleShowConversation"
       />
     </main>
 
@@ -397,11 +559,12 @@ const handleUserClick = (userId: string) => {
       @confirm="handleInfoConfirm"
     />
 
-    <!-- 评论输入弹窗：点击动态评论按钮后从底部滑出 -->
+    <!-- 评论/回复输入弹窗：点击动态评论按钮或评论回复按钮后从底部滑出 -->
     <CommentModal
       v-model:visible="showCommentModal"
       :moment-id="momentId"
       :current-user="currentUser"
+      :reply-target="replyTarget"
       @sent="handleCommentSent"
     />
   </div>

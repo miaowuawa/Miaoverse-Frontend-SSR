@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import { ref, computed, nextTick, watch } from 'vue'
 import { notifyError, notifySuccess } from '~/utils/notify'
-import { api, ApiRequestError } from '~/utils/api'
+import { api, ApiRequestError, normalizeReply } from '~/utils/api'
+import type { ReplyItemData } from '~/types/comment'
 import AvatarImg from '~/components/AvatarImg.vue'
+import StickerPicker from '~/components/StickerPicker.vue'
+import { buildStickerToken, countStickerTokens, MAX_COMMENT_STICKERS, STICKER_TOKEN_RE } from '~/utils/sticker'
 
 const props = defineProps<{
   visible: boolean
@@ -10,26 +13,40 @@ const props = defineProps<{
   momentId: string
   /** 当前登录用户（用于显示头像/未登录提示） */
   currentUser?: { id: string; displayName: string; avatar?: string | null } | null
+  /** 回复目标（楼中楼）：存在时为回复模式，发送到被回复的评论/回复 */
+  replyTarget?: { rootId: string; targetId: string; targetName: string } | null
 }>()
 
 const emit = defineEmits<{
   (e: 'update:visible', value: boolean): void
-  (e: 'sent'): void
+  /** 评论成功不带 payload；回复成功带楼中楼首条评论 id 与新回复数据 */
+  (e: 'sent', payload?: { rootId: string; reply: ReplyItemData }): void
 }>()
 
-// 评论输入内容
+// 评论输入内容（贴纸以内嵌标记 [sticker:<uuid>] 形式插入，随文字穿插展示，最多 25 个）
 const content = ref('')
 // 表情面板是否展开
 const showEmoji = ref(false)
+// 贴纸选择器是否展开
+const showSticker = ref(false)
 // 发送中
 const sending = ref(false)
 // textarea 引用，用于聚焦与光标操作
 const textareaRef = ref<HTMLTextAreaElement | null>(null)
 
-// 后端限制 consts.MaxCommentLen = 1000
+// 后端限制 consts.MaxCommentLen = 1000（按去除贴纸标记后的正文计算，与后端口径一致）
 const maxLen = 1000
-const remaining = computed(() => maxLen - content.value.length)
-const canSend = computed(() => content.value.trim().length > 0 && !sending.value)
+// 输入框硬上限：正文 + 贴纸标记的字符空间（字数限制按正文计算，见 remaining）
+const maxRawLen = maxLen + MAX_COMMENT_STICKERS * 50
+
+// 正文字数（不含贴纸标记，按 UTF-8 字节数与后端口径一致）
+const textByteLen = computed(() => {
+  const text = content.value.replace(STICKER_TOKEN_RE, '')
+  return new TextEncoder().encode(text).length
+})
+const remaining = computed(() => maxLen - textByteLen.value)
+const stickerCount = computed(() => countStickerTokens(content.value))
+const canSend = computed(() => content.value.trim().length > 0 && remaining.value >= 0 && !sending.value)
 
 // 弹窗打开时聚焦输入框并重置状态
 watch(
@@ -38,6 +55,7 @@ watch(
     if (v) {
       content.value = ''
       showEmoji.value = false
+      showSticker.value = false
       sending.value = false
       await nextTick()
       textareaRef.value?.focus()
@@ -74,6 +92,25 @@ const handleEmojiClick = (emoji: string) => {
   insertAtCursor(emoji)
 }
 
+// 贴纸选择：在光标处插入贴纸标记（一条评论最多 25 张贴纸，可重复使用同一张贴纸）
+const handleStickerSelect = (stickerUuid: string) => {
+  if (stickerCount.value >= MAX_COMMENT_STICKERS) {
+    notifyError(new Error('贴纸数量已达上限'), `一条评论最多使用 ${MAX_COMMENT_STICKERS} 张贴纸`)
+    return
+  }
+  insertAtCursor(buildStickerToken(stickerUuid))
+}
+
+const toggleEmoji = () => {
+  showSticker.value = false
+  showEmoji.value = !showEmoji.value
+}
+
+const toggleSticker = () => {
+  showEmoji.value = false
+  showSticker.value = !showSticker.value
+}
+
 const handleMention = () => {
   // @某人：插入 @ 占位符，后续可接入用户搜索面板
   // 目前无用户搜索接口，仅插入标记并聚焦，由用户手动输入被提及的用户名
@@ -98,9 +135,22 @@ const handleSend = async () => {
   }
   sending.value = true
   try {
-    const res = await api.createMomentComment(props.momentId, content.value.trim())
+    const text = content.value.trim()
+    // 回复模式：发送楼中楼回复（被回复对象可为一级评论或楼中楼内任意回复）
+    if (props.replyTarget) {
+      const res = await api.createCommentReply(props.replyTarget.targetId, text)
+      content.value = ''
+      showEmoji.value = false
+      showSticker.value = false
+      notifySuccess(res.msg || '回复成功')
+      emit('sent', { rootId: props.replyTarget.rootId, reply: normalizeReply(res.reply) })
+      emit('update:visible', false)
+      return
+    }
+    const res = await api.createMomentComment(props.momentId, text)
     content.value = ''
     showEmoji.value = false
+    showSticker.value = false
     notifySuccess(res.msg || '评论成功')
     emit('sent')
     emit('update:visible', false)
@@ -109,7 +159,7 @@ const handleSend = async () => {
     if (err instanceof ApiRequestError && err.httpStatus === 401) {
       notifyError(err, '请先登录后再评论')
     } else {
-      notifyError(err, '评论失败')
+      notifyError(err, props.replyTarget ? '回复失败' : '评论失败')
     }
   } finally {
     sending.value = false
@@ -147,7 +197,9 @@ const handleKeydown = (e: KeyboardEvent) => {
 
             <!-- 标题栏 -->
             <div class="flex items-center justify-between px-4 pt-3 pb-2">
-              <h3 class="text-base font-medium text-gray-800">发表评论</h3>
+              <h3 class="text-base font-medium text-gray-800">
+                {{ replyTarget ? `回复 @${replyTarget.targetName}` : '发表评论' }}
+              </h3>
               <button
                 class="w-8 h-8 flex items-center justify-center rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
                 @click="handleClose"
@@ -170,14 +222,17 @@ const handleKeydown = (e: KeyboardEvent) => {
                   ref="textareaRef"
                   v-model="content"
                   class="flex-1 min-h-[100px] max-h-[240px] resize-none rounded-xl bg-gray-50 border border-gray-200 px-3 py-2.5 text-[15px] text-gray-800 placeholder-gray-400 focus:outline-none focus:border-lime-400 focus:bg-white transition-colors"
-                  placeholder="写下你的评论..."
-                  :maxlength="maxLen"
+                  :placeholder="replyTarget ? `回复 @${replyTarget.targetName}...` : '写下你的评论...'"
+                  :maxlength="maxRawLen"
                   rows="4"
                 ></textarea>
               </div>
 
-              <!-- 字数统计 -->
-              <div class="flex justify-end mt-1.5">
+              <!-- 字数统计 + 贴纸计数 -->
+              <div class="flex justify-end items-center gap-3 mt-1.5">
+                <span class="text-xs text-gray-400">
+                  贴纸 {{ stickerCount }}/{{ MAX_COMMENT_STICKERS }}
+                </span>
                 <span class="text-xs" :class="remaining < 0 ? 'text-red-500' : 'text-gray-400'">
                   {{ remaining }}
                 </span>
@@ -200,6 +255,13 @@ const handleKeydown = (e: KeyboardEvent) => {
               </div>
             </Transition>
 
+            <!-- 贴纸选择器：收藏夹（个人）与贴纸包分开显示，点击贴纸插入到光标处 -->
+            <Transition name="expand">
+              <div v-if="showSticker" class="px-4 pb-2">
+                <StickerPicker @select="handleStickerSelect" />
+              </div>
+            </Transition>
+
             <!-- 底部功能栏 -->
             <div class="flex items-center justify-between px-4 py-3 border-t border-gray-100">
               <!-- 左侧工具按钮 -->
@@ -208,9 +270,17 @@ const handleKeydown = (e: KeyboardEvent) => {
                   class="w-9 h-9 flex items-center justify-center rounded-full text-gray-500 hover:bg-gray-100 transition-colors"
                   :class="{ 'text-lime-600 bg-lime-50': showEmoji }"
                   title="表情"
-                  @click="showEmoji = !showEmoji"
+                  @click="toggleEmoji"
                 >
                   <i class="fa-regular fa-face-smile text-lg"></i>
+                </button>
+                <button
+                  class="w-9 h-9 flex items-center justify-center rounded-full text-gray-500 hover:bg-gray-100 transition-colors"
+                  :class="{ 'text-lime-600 bg-lime-50': showSticker }"
+                  title="贴纸（一条评论最多 25 个）"
+                  @click="toggleSticker"
+                >
+                  <i class="fa-solid fa-note-sticker text-lg"></i>
                 </button>
                 <button
                   class="w-9 h-9 flex items-center justify-center rounded-full text-gray-500 hover:bg-gray-100 transition-colors"

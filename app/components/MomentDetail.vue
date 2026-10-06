@@ -2,6 +2,9 @@
 import { ref, computed } from 'vue'
 import { useImageViewer } from '~/composables/useImageViewer'
 import AvatarImg from '~/components/AvatarImg.vue'
+import CommentItem from '~/components/CommentItem.vue'
+import type { CommentItemData } from '~/types/comment'
+import { formatAbsoluteTime, formatRelativeTime } from '~/utils/time'
 
 /** 单个表情反应计数 */
 export interface ReactionItem {
@@ -38,6 +41,10 @@ const props = defineProps<{
   moment: MomentDetailData
   /** 评论列表当前是否处于加载状态 */
   commentsLoading?: boolean
+  /** 评论列表（一级评论，含贴纸穿插展示信息） */
+  comments?: CommentItemData[]
+  /** 评论总数（用于「加载更多」判断） */
+  commentsTotal?: number
 }>()
 
 const emit = defineEmits<{
@@ -52,6 +59,17 @@ const emit = defineEmits<{
   (e: 'reaction', payload: { id: string; emoji: string }): void
   (e: 'sort-change', sort: 'hot' | 'time'): void
   (e: 'user-click', userId: string): void
+  (e: 'like-comment', id: string): void
+  (e: 'unlike-comment', id: string): void
+  (e: 'load-more-comments'): void
+  /** 回复评论/回复他人的回复（楼中楼） */
+  (e: 'reply', payload: { rootId: string; targetId: string; targetName: string }): void
+  (e: 'like-reply', payload: { rootId: string; replyId: string }): void
+  (e: 'unlike-reply', payload: { rootId: string; replyId: string }): void
+  /** 展开楼中楼回复 */
+  (e: 'expand-replies', rootId: string): void
+  /** 查看完整对话（一键加载该链下全部评论回复） */
+  (e: 'show-conversation', rootId: string): void
 }>()
 
 const { openViewer } = useImageViewer()
@@ -111,6 +129,18 @@ const handleImageClick = (index: number) => {
 const handleUserClick = () => {
   emit('user-click', props.moment.author.id)
 }
+
+const handleCommentLike = (id: string) => emit('like-comment', id)
+const handleCommentUnlike = (id: string) => emit('unlike-comment', id)
+const handleLoadMoreComments = () => emit('load-more-comments')
+const handleCommentReply = (payload: { rootId: string; targetId: string; targetName: string }) => emit('reply', payload)
+const handleReplyLike = (payload: { rootId: string; replyId: string }) => emit('like-reply', payload)
+const handleReplyUnlike = (payload: { rootId: string; replyId: string }) => emit('unlike-reply', payload)
+const handleExpandReplies = (rootId: string) => emit('expand-replies', rootId)
+const handleShowConversation = (rootId: string) => emit('show-conversation', rootId)
+
+// 是否还有更多评论可加载
+const hasMoreComments = computed(() => (props.comments?.length ?? 0) < (props.commentsTotal ?? 0))
 </script>
 
 <template>
@@ -223,9 +253,9 @@ const handleUserClick = () => {
           </div>
         </div>
 
-        <!-- 时间/地点 -->
+        <!-- 时间/地点（人性化时间，悬停显示精确日期时间） -->
         <div class="text-xs text-gray-400 mb-3 flex items-center gap-2">
-          <span>{{ moment.publishTime }}</span>
+          <span :title="formatAbsoluteTime(moment.publishTime)">{{ formatRelativeTime(moment.publishTime) }}</span>
           <span v-if="moment.location" class="flex items-center gap-1">
             <i class="fa-solid fa-location-dot text-gray-300"></i>
             {{ moment.location }}
@@ -307,12 +337,41 @@ const handleUserClick = () => {
       </div>
 
       <!-- 评论区加载占位 -->
-      <div v-if="commentsLoading" class="glass-card rounded-2xl p-8 flex items-center justify-center">
+      <div v-if="commentsLoading && (!comments || comments.length === 0)" class="glass-card rounded-2xl p-8 flex items-center justify-center">
         <div class="flex items-center gap-2 text-gray-400 text-sm">
           <i class="fa-solid fa-circle-notch fa-spin"></i>
           <span>评论加载中...</span>
         </div>
       </div>
+
+      <!-- 评论列表（贴纸随文字穿插展示；贴纸被封禁时灰字提示） -->
+      <template v-else-if="comments && comments.length > 0">
+        <CommentItem
+          v-for="comment in comments"
+          :key="comment.id"
+          :comment="comment"
+          @like="handleCommentLike"
+          @unlike="handleCommentUnlike"
+          @user-click="handleUserClick"
+          @reply="handleCommentReply"
+          @like-reply="handleReplyLike"
+          @unlike-reply="handleReplyUnlike"
+          @expand-replies="handleExpandReplies"
+          @show-conversation="handleShowConversation"
+        />
+
+        <div v-if="commentsLoading" class="glass-card rounded-2xl p-4 text-center text-gray-400 text-sm">
+          <i class="fa-solid fa-circle-notch fa-spin mr-1"></i>
+          加载中...
+        </div>
+        <button
+          v-else-if="hasMoreComments"
+          class="glass-card rounded-2xl w-full py-3 text-center text-sm text-gray-500 hover:text-lime-600 transition-colors"
+          @click="handleLoadMoreComments"
+        >
+          加载更多评论
+        </button>
+      </template>
 
       <!-- 评论区空位 -->
       <div v-else class="glass-card rounded-2xl p-8 text-center text-gray-400 text-sm">
