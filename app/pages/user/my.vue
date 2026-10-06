@@ -293,6 +293,11 @@ const handleUserClick = (userId: string) => {
   }
 }
 
+// 进入个人资料修改页（/settings/profile）
+const goEditProfile = () => {
+  navigateTo('/settings/profile')
+}
+
 function handleScroll(e: Event): void {
   const target = e.target as HTMLElement
   const nearBottom = target.scrollHeight - target.scrollTop - target.clientHeight < 200
@@ -326,9 +331,6 @@ const serverMenu = ref<ServerMenuPayload | null>({
   items: [
     { id: 'account-settings', label: '账号设置', icon: 'fa-user-gear', action: 'route', route: '/settings/account' },
     { id: 'edit-profile', label: '编辑资料', icon: 'fa-pen', action: 'route', route: '/settings/profile' },
-    { id: 'placeholder-1', label: '占位设置项', icon: 'fa-user-gear', action: 'modal' },
-    { id: 'placeholder-2', label: '占位设置项', icon: 'fa-user-gear', action: 'modal' },
-    { id: 'placeholder-3', label: '占位设置项', icon: 'fa-user-gear', action: 'modal' },
     { id: 'my-account', type: 'widget', widget: 'account' },
     { id: 'switch-account', label: '切换账号', icon: 'fa-right-left', action: 'popper' },
     { id: 'logout', label: '退出登录', icon: 'fa-right-from-bracket', action: 'action' },
@@ -528,6 +530,7 @@ function formatNumber(num: number): string {
                 <div class="flex items-center gap-2 flex-shrink-0">
                   <button
                     class="px-4 py-1.5 rounded-full text-sm font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors"
+                    @click="goEditProfile"
                   >
                     <i class="fa-solid fa-pen mr-1"></i>
                     编辑资料

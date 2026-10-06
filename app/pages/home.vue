@@ -109,9 +109,6 @@ const serverMenu = ref<ServerMenuPayload | null>({
   items: [
     { id: 'account-settings', label: '账号设置', icon: 'fa-user-gear', action: 'route', route: '/settings/account' },
     { id: 'edit-profile', label: '编辑资料', icon: 'fa-pen', action: 'route', route: '/settings/profile' },
-    { id: 'placeholder-1', label: '占位设置项', icon: 'fa-user-gear', action: 'modal' },
-    { id: 'placeholder-2', label: '占位设置项', icon: 'fa-user-gear', action: 'modal' },
-    { id: 'placeholder-3', label: '占位设置项', icon: 'fa-user-gear', action: 'modal' },
     { id: 'my-account', type: 'widget', widget: 'account' },
     { id: 'switch-account', label: '切换账号', icon: 'fa-right-left', action: 'popper' },
     { id: 'logout', label: '退出登录', icon: 'fa-right-from-bracket', action: 'action' },

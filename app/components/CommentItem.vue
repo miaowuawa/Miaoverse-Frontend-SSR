@@ -7,6 +7,7 @@ import { computed, ref } from 'vue'
 import AvatarImg from '~/components/AvatarImg.vue'
 import CommentContent from '~/components/CommentContent.vue'
 import type { CommentItemData, ReplyItemData } from '~/types/comment'
+import { MAX_INLINE_REPLY_DEPTH, resolveReplyDepths } from '~/utils/comment'
 import { formatAbsoluteTime, formatRelativeTime } from '~/utils/time'
 
 const props = defineProps<{
@@ -49,9 +50,52 @@ function replyTargetName(reply: ReplyItemData): string {
   return target?.author.name || ''
 }
 
-// 是否还有未加载的回复（用于「查看完整对话」入口）
-const hasMoreReplies = computed(
-  () => (props.comment.replies?.length ?? 0) < props.comment.replyCount
+// 已加载的楼中楼回复（null 表示尚未加载）
+const loadedReplies = computed(() => props.comment.replies ?? [])
+const loadedCount = computed(() => loadedReplies.value.length)
+
+// 有效回复总数：后端 reply_count 与已加载数量取较大值。
+// 后端计数缺失（为 0）或偏小时，只要链上确有回复，仍展示「展开 x 条回复」入口。
+const effectiveReplyCount = computed(() => Math.max(props.comment.replyCount, loadedCount.value))
+// 是否存在有效回复（决定「展开 x 条回复」按钮是否展示）
+const hasReplies = computed(() => effectiveReplyCount.value > 0)
+
+// 各回复相对首条评论的嵌套层数（根为 0，直接回复为 1）
+const replyDepths = computed(() => resolveReplyDepths(props.comment.id, loadedReplies.value))
+// 已加载回复的最大嵌套层数（后端 reply_depth 缺失/滞后时兜底）
+const maxLoadedDepth = computed(() => {
+  let max = 0
+  for (const depth of replyDepths.value.values()) {
+    if (depth > max) max = depth
+  }
+  return max
+})
+// 链式对话是否超过预览层数：超过时需在首条评论处提供「查看完整对话」才能看到更深层回复
+const isDeepThread = computed(
+  () => props.comment.replyDepth > MAX_INLINE_REPLY_DEPTH || maxLoadedDepth.value > MAX_INLINE_REPLY_DEPTH
+)
+// 是否还有未加载的回复
+const hasMoreReplies = computed(() => loadedCount.value < effectiveReplyCount.value)
+
+// 预览态只展示不超过预览层数的回复；「查看完整对话」加载后展示全部层数
+const displayReplies = computed(() =>
+  loadedReplies.value
+    .map((reply) => {
+      const depth = replyDepths.value.get(reply.id) ?? 1
+      return { reply, depth, indent: Math.min(Math.max(depth - 1, 0), MAX_INLINE_REPLY_DEPTH - 1) * 16 }
+    })
+    .filter((item) => props.comment.conversationLoaded || item.depth <= MAX_INLINE_REPLY_DEPTH)
+)
+// 是否存在被预览层数截断、需「查看完整对话」才能看到的更深层回复
+const hasHiddenDeepReplies = computed(
+  () =>
+    !props.comment.conversationLoaded &&
+    loadedReplies.value.some((reply) => (replyDepths.value.get(reply.id) ?? 1) > MAX_INLINE_REPLY_DEPTH)
+)
+
+// 「查看完整对话」入口（位于首条评论处）：链式对话超过 3 层，或展开后仍有未加载的回复
+const showConversationEntry = computed(
+  () => !props.comment.conversationLoaded && (isDeepThread.value || (threadVisible.value && hasMoreReplies.value))
 )
 
 const handleLike = () => {
@@ -96,7 +140,11 @@ const toggleThread = () => {
   threadVisible.value = !threadVisible.value
 }
 
-const handleShowConversation = () => emit('show-conversation', props.comment.id)
+// 查看完整对话：展开楼中楼并请求该链下全部回复（点击后即可看到全部层数）
+const handleShowConversation = () => {
+  threadVisible.value = true
+  emit('show-conversation', props.comment.id)
+}
 </script>
 
 <template>
@@ -139,17 +187,28 @@ const handleShowConversation = () => emit('show-conversation', props.comment.id)
             <span>{{ formatNumber(comment.likes) }}</span>
           </button>
           <button class="hover:text-lime-600 transition-colors" @click="handleReplyToComment">回复</button>
+          <!-- 只要有有效回复就展示「展开 x 条回复」入口 -->
           <button
-            v-if="comment.replyCount > 0"
+            v-if="hasReplies"
             class="hover:text-lime-600 transition-colors"
             @click="toggleThread"
           >
             <i :class="threadVisible ? 'fa-solid fa-angle-up' : 'fa-solid fa-angle-down'"></i>
-            <span>{{ threadVisible ? '收起回复' : `共 ${formatNumber(comment.replyCount)} 条回复` }}</span>
+            <span>{{ threadVisible ? '收起回复' : `展开 ${formatNumber(effectiveReplyCount)} 条回复` }}</span>
           </button>
         </div>
 
-        <!-- 楼中楼回复链 -->
+        <!-- 查看完整对话：链式对话超过 3 层或仍有未加载回复时，在首条评论处提供入口 -->
+        <button
+          v-if="showConversationEntry"
+          class="mt-2 inline-flex items-center gap-1 text-xs text-lime-600 hover:text-lime-700 font-medium transition-colors"
+          @click="handleShowConversation"
+        >
+          <i class="fa-regular fa-comments"></i>
+          <span>查看完整对话（共 {{ formatNumber(effectiveReplyCount) }} 条回复）</span>
+        </button>
+
+        <!-- 楼中楼回复链（预览态最多展示 MAX_INLINE_REPLY_DEPTH 层，更深层由「查看完整对话」展开） -->
         <div v-if="threadVisible" class="mt-3 rounded-xl bg-gray-50/80 border border-gray-100 px-3 py-2 space-y-2.5">
           <!-- 加载占位 -->
           <div v-if="comment.repliesLoading && !comment.replies" class="flex items-center gap-2 text-gray-400 text-xs py-1">
@@ -158,13 +217,18 @@ const handleShowConversation = () => emit('show-conversation', props.comment.id)
           </div>
 
           <template v-else>
-            <div v-for="reply in comment.replies ?? []" :key="reply.id" class="flex items-start gap-2">
+            <div
+              v-for="item in displayReplies"
+              :key="item.reply.id"
+              class="flex items-start gap-2"
+              :style="{ marginLeft: `${item.indent}px` }"
+            >
               <!-- 回复者头像 -->
               <div
                 class="w-7 h-7 rounded-full overflow-hidden flex-shrink-0 cursor-pointer ring-1 ring-transparent hover:ring-lime-200 transition-all"
-                @click="emit('user-click', reply.author.id)"
+                @click="emit('user-click', item.reply.author.id)"
               >
-                <AvatarImg :avatar-uuid="reply.author.avatar" class="w-full h-full"></AvatarImg>
+                <AvatarImg :avatar-uuid="item.reply.author.avatar" class="w-full h-full"></AvatarImg>
               </div>
 
               <div class="flex-1 min-w-0">
@@ -172,31 +236,31 @@ const handleShowConversation = () => emit('show-conversation', props.comment.id)
                 <div class="text-[13px] leading-snug">
                   <span
                     class="font-medium text-gray-800 cursor-pointer hover:text-lime-600 transition-colors"
-                    @click="emit('user-click', reply.author.id)"
+                    @click="emit('user-click', item.reply.author.id)"
                   >
-                    {{ reply.author.name }}
+                    {{ item.reply.author.name }}
                   </span>
-                  <template v-if="replyTargetName(reply)">
+                  <template v-if="replyTargetName(item.reply)">
                     <span class="text-gray-400"> 回复 </span>
-                    <span class="text-lime-600">@{{ replyTargetName(reply) }}</span>
+                    <span class="text-lime-600">@{{ replyTargetName(item.reply) }}</span>
                   </template>
                 </div>
 
                 <!-- 回复正文（贴纸随文字穿插展示） -->
-                <CommentContent :content="reply.content" :stickers="reply.stickers" compact />
+                <CommentContent :content="item.reply.content" :stickers="item.reply.stickers" compact />
 
                 <!-- 回复时间 + 点赞 + 回复 -->
                 <div class="mt-1 flex items-center gap-3 text-xs text-gray-400">
-                  <span :title="formatAbsoluteTime(reply.createdAt)">{{ formatRelativeTime(reply.createdAt) }}</span>
+                  <span :title="formatAbsoluteTime(item.reply.createdAt)">{{ formatRelativeTime(item.reply.createdAt) }}</span>
                   <button
                     class="flex items-center gap-1 transition-colors"
-                    :class="reply.isLiked ? 'text-pink-500' : 'hover:text-pink-500'"
-                    @click="handleReplyLike(reply)"
+                    :class="item.reply.isLiked ? 'text-pink-500' : 'hover:text-pink-500'"
+                    @click="handleReplyLike(item.reply)"
                   >
-                    <i :class="reply.isLiked ? 'fa-solid fa-heart' : 'fa-regular fa-heart'"></i>
-                    <span>{{ formatNumber(reply.likes) }}</span>
+                    <i :class="item.reply.isLiked ? 'fa-solid fa-heart' : 'fa-regular fa-heart'"></i>
+                    <span>{{ formatNumber(item.reply.likes) }}</span>
                   </button>
-                  <button class="hover:text-lime-600 transition-colors" @click="handleReplyToReply(reply)">回复</button>
+                  <button class="hover:text-lime-600 transition-colors" @click="handleReplyToReply(item.reply)">回复</button>
                 </div>
               </div>
             </div>
@@ -207,16 +271,17 @@ const handleShowConversation = () => emit('show-conversation', props.comment.id)
               <span>加载中...</span>
             </div>
 
-            <!-- 查看完整对话：一键展开该链下全部评论回复 -->
+            <!-- 预览态层数截断提示：更深层回复通过首条评论处的「查看完整对话」展开 -->
             <button
-              v-else-if="hasMoreReplies"
+              v-else-if="hasHiddenDeepReplies"
               class="w-full text-center text-xs text-lime-600 hover:text-lime-700 font-medium py-1 transition-colors"
               @click="handleShowConversation"
             >
-              <i class="fa-regular fa-comments mr-1"></i>
-              查看完整对话（共 {{ formatNumber(comment.replyCount) }} 条回复）
+              已展示前 {{ MAX_INLINE_REPLY_DEPTH }} 层回复，点击查看完整对话
             </button>
-            <div v-else class="text-center text-xs text-gray-400 py-0.5">已显示全部 {{ comment.replies?.length ?? 0 }} 条回复</div>
+            <div v-else-if="displayReplies.length > 0 && !hasMoreReplies" class="text-center text-xs text-gray-400 py-0.5">
+              已显示全部 {{ formatNumber(displayReplies.length) }} 条回复
+            </div>
           </template>
         </div>
       </div>

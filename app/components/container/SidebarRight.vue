@@ -1,8 +1,10 @@
 <script setup lang="ts">
-// 通知项接口
+import { categoryMeta } from '~/types/notification'
+import { formatRelativeTime } from '~/utils/time'
+
+// 通知项接口（右侧栏最近通知摘要）
 interface NotificationItem {
   id: string
-  type: 'login' | 'mention' | 'follow' | 'like'
   title: string
   time: string
   icon?: string
@@ -10,18 +12,26 @@ interface NotificationItem {
   read: boolean
 }
 
-// 模拟通知数据
-const notifications: NotificationItem[] = [
-  {
-    id: '1',
-    type: 'login',
-    title: '账号已在新设备上登录',
-    time: '14小时前',
-    icon: 'fa-user',
-    iconColor: 'bg-blue-500',
-    read: false,
-  },
-]
+// 最近通知（真实数据：与 SSE 推送、通知中心共享一份状态，展示最近 5 条）
+const { notifications: notifyItems, fetchNotifications } = useNotifications()
+
+const notifications = computed<NotificationItem[]>(() =>
+  notifyItems.value.slice(0, 5).map((item) => ({
+    id: item.id,
+    title: item.title,
+    time: formatRelativeTime(item.createdAt),
+    icon: categoryMeta(item.category).icon,
+    iconColor: categoryMeta(item.category).color,
+    read: item.read,
+  }))
+)
+
+// 首次挂载时拉取最近通知（登录态下才请求；已加载过则直接复用共享状态）
+onMounted(() => {
+  if (notifyItems.value.length === 0) {
+    void fetchNotifications('', { reset: true })
+  }
+})
 
 // 趋势项接口
 interface TrendItem {
@@ -148,6 +158,11 @@ const generateChartPath = (data: number[]) => {
             class="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0 mt-1"
           ></span>
         </div>
+
+        <!-- 空状态 -->
+        <p v-if="notifications.length === 0" class="text-xs text-gray-400 text-center py-2">
+          暂无通知
+        </p>
       </div>
     </div>
 

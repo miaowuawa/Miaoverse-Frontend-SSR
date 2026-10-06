@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'nuxt/app'
 import SidebarLeft from '~/components/container/SidebarLeft.vue'
 import SidebarRight from '~/components/container/SidebarRight.vue'
@@ -11,6 +11,7 @@ import Moments from '~/components/Moments.vue'
 import AvatarImg from '~/components/AvatarImg.vue'
 import { api, ApiRequestError, type ServerFeedItem, type ServerUserPayload } from '~/utils/api'
 import { notifyError, withCode } from '~/utils/notify'
+import { formatRelativeTime } from '~/utils/time'
 import type { MenuItem, ServerMenuPayload } from '~/types/menu'
 import type { MultipleAccountChoice } from '~/types/user'
 
@@ -20,6 +21,8 @@ const router = useRouter()
 // 安全：强制将路由参数转为字符串并做 encodeURIComponent 防护，避免特殊字符注入 URL 路径或模板
 const rawUserId = String(route.params.id || '')
 const encodedUserId = encodeURIComponent(rawUserId)
+// 当前正在查看的用户 id（路由切换到其他用户主页时更新）
+const viewingUserId = ref(rawUserId)
 
 useHead({
   title: '用户主页 - Miaoverse',
@@ -94,6 +97,11 @@ const viewingSelf = computed(() => {
   if (!currentUser.value || !user.value) return false
   return String(currentUser.value.id) === String(user.value.id)
 })
+
+// 进入个人资料修改页（/settings/profile），仅本人视角可见
+const goEditProfile = () => {
+  navigateTo('/settings/profile')
+}
 
 // ===== 获取用户资料 =====
 async function fetchUserProfile(id: string): Promise<void> {
@@ -361,6 +369,9 @@ function handleScroll(e: Event): void {
 }
 
 // ===== 初始化 =====
+// 在线状态定时刷新句柄（页面卸载时清理）
+let presenceTimer: ReturnType<typeof setInterval> | null = null
+
 onMounted(async () => {
   await auth.restoreSession()
   await fetchUserProfile(rawUserId)
@@ -377,12 +388,26 @@ onMounted(async () => {
       }
     }
   }
+  // 在线状态：进入页面拉取一次，之后每 60 秒刷新（心跳判定的在线状态是动态变化的）
+  void fetchPresence([rawUserId])
+  presenceTimer = setInterval(() => {
+    void fetchPresence([viewingUserId.value], { force: true })
+  }, 60 * 1000)
+})
+
+onBeforeUnmount(() => {
+  if (presenceTimer) {
+    clearInterval(presenceTimer)
+    presenceTimer = null
+  }
 })
 
 // 路由变化时刷新（例如从 /user/1 到 /user/2）
 watch(() => route.params.id, async (newId) => {
   const id = String(newId || '')
   if (!id) return
+  viewingUserId.value = id
+  void fetchPresence([id], { force: true })
   await fetchUserProfile(id)
   if (user.value) {
     await fetchUserStats(id)
@@ -401,9 +426,6 @@ const serverMenu = ref<ServerMenuPayload | null>({
   items: [
     { id: 'account-settings', label: '账号设置', icon: 'fa-user-gear', action: 'route', route: '/settings/account' },
     { id: 'edit-profile', label: '编辑资料', icon: 'fa-pen', action: 'route', route: '/settings/profile' },
-    { id: 'placeholder-1', label: '占位设置项', icon: 'fa-user-gear', action: 'modal' },
-    { id: 'placeholder-2', label: '占位设置项', icon: 'fa-user-gear', action: 'modal' },
-    { id: 'placeholder-3', label: '占位设置项', icon: 'fa-user-gear', action: 'modal' },
     { id: 'my-account', type: 'widget', widget: 'account' },
     { id: 'switch-account', label: '切换账号', icon: 'fa-right-left', action: 'popper' },
     { id: 'logout', label: '退出登录', icon: 'fa-right-from-bracket', action: 'action' },
@@ -514,7 +536,18 @@ const registerDate = computed(() => {
   const d = String(date.getDate()).padStart(2, '0')
   return `${y}/${m}/${d}`
 })
-const onlineText = computed(() => '3小时前在线') // TODO: 接入真实在线状态
+// 在线状态（基于 SSE 连接心跳判定，见 usePresence）：
+// 心跳正常 → 「在线」；离线但有活跃记录 → 「x前在线」；无活跃记录 → 「离线」
+const { fetchPresence, presenceOf } = usePresence()
+const presenceState = computed(() => presenceOf(viewingUserId.value))
+const isUserOnline = computed(() => presenceState.value?.online ?? false)
+const onlineText = computed(() => {
+  const p = presenceState.value
+  if (p?.online) return '在线'
+  if (!p?.lastSeen) return '离线'
+  const rel = formatRelativeTime(p.lastSeen)
+  return rel ? `${rel}在线` : '离线'
+})
 
 // 账号状态与惩罚提示
 const accountBanned = computed(() => false) // TODO: 后端用户资料需返回 status
@@ -632,6 +665,7 @@ function formatNumber(num: number): string {
                   <button
                     v-else
                     class="px-4 py-1.5 rounded-full text-sm font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors"
+                    @click="goEditProfile"
                   >
                     <i class="fa-solid fa-pen mr-1"></i>
                     编辑资料
@@ -647,8 +681,12 @@ function formatNumber(num: number): string {
                 {{ displayBio }}
               </p>
 
-              <!-- 在线状态 -->
-              <p class="text-xs text-gray-400 mt-1">
+              <!-- 在线状态（基于 SSE 连接心跳判定：心跳正常=在线） -->
+              <p
+                class="text-xs mt-1 flex items-center gap-1.5"
+                :class="isUserOnline ? 'text-green-600' : 'text-gray-400'"
+              >
+                <span v-if="isUserOnline" class="w-2 h-2 rounded-full bg-green-500"></span>
                 {{ onlineText }}
               </p>
             </div>

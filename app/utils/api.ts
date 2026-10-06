@@ -3,6 +3,8 @@
 import type { ServerUserPayload } from '~/types/user'
 import type { MomentDetailData } from '~/components/MomentDetail.vue'
 import type { CommentAuthor, CommentItemData, CommentStickerInfo, ReplyItemData } from '~/types/comment'
+import type { NotificationCategory, ServerNotification, ServerNotifyUnread } from '~/types/notification'
+import type { ServerPresence } from '~/types/presence'
 
 export interface ApiErrorBody {
   code: number
@@ -37,6 +39,8 @@ export interface ServerCommentInfo {
   is_liked?: boolean
   /** 楼中楼回复总数（含全部子孙回复） */
   reply_count?: number
+  /** 楼中楼最大嵌套层数（首条评论为 0 层、直接回复为 1 层） */
+  reply_depth?: number
   /** 评论内嵌贴纸展示信息列表（按 content 中标记出现顺序，一条评论最多 25 张） */
   stickers?: ServerCommentSticker[]
 }
@@ -125,6 +129,7 @@ export function normalizeComment(raw: ServerCommentInfo): CommentItemData {
     author: normalizeCommentAuthor(raw),
     stickers: normalizeStickers(raw.stickers),
     replyCount: raw.reply_count ?? 0,
+    replyDepth: raw.reply_depth ?? 0,
     replies: null,
     repliesLoading: false,
     conversationLoaded: false,
@@ -299,11 +304,27 @@ export interface SmsLoginResult {
   users?: ServerUserPayload[]
 }
 
+/** 短信验证码业务场景（与后端 consts.Action* 一一对应）。
+ *  公开接口只允许 LOGIN；CHANGE_PASSWORD 只能通过登录态接口申请（手机号取自会话）。 */
+export type SmsAction = 'LOGIN' | 'CHANGE_PASSWORD'
+
 export const api = {
+  // 申请登录/注册短信验证码：POST /api/v1/auth/sms/send（无需登录）
+  // 同一手机号 60 秒冷却期内重复申请后端返回 429。
   sendSmsCode(phone: string, region = '86') {
     return request<{ code_uuid: string; msg: string }>('/api/v1/auth/sms/send', {
       method: 'POST',
-      body: { phone, region, a: buildA() },
+      body: { phone, region, action: 'LOGIN' satisfies SmsAction, a: buildA() },
+    })
+  },
+
+  // 申请「修改密码」短信验证码：POST /api/v1/user/password/sms（需登录）
+  // 服务端把验证码发到当前账号绑定的手机号，客户端不传手机号，
+  // 因此该接口无法被用来给任意号码发短信；60 秒冷却期内返回 429。
+  sendPasswordSmsCode() {
+    return request<{ code_uuid: string; msg: string }>('/api/v1/user/password/sms', {
+      method: 'POST',
+      body: {},
     })
   },
 
@@ -352,7 +373,38 @@ export const api = {
   },
 
   me() {
-    return request<{ code: number; msg: string; user: ServerUserPayload }>('/api/v1/user/me')
+    return request<{ code: number; msg: string; user: ServerUserPayload; phone?: string }>('/api/v1/user/me')
+  },
+
+  // ===== 个人资料（仅本人，uid 由服务端从登录会话取，不接受客户端指定）=====
+
+  // 部分更新本人资料：PATCH /api/v1/user/info
+  // 只提交发生变化的字段；服务端不接收 phone/region（不支持更改），
+  // avatar 需要先通过 POST /api/v1/user/files（permission=0）上传拿到文件 uuid，
+  // 服务端会校验文件归属/图片类型/公开性并检查 PermAvatar 权限位。
+  updateProfile(payload: {
+    username?: string
+    nickname?: string
+    avatar?: string
+    bio?: string
+    gender?: number
+  }): Promise<{ code: number; msg: string; user: ServerUserPayload }> {
+    return request('/api/v1/user/info', { method: 'PATCH', body: payload })
+  },
+
+  // 查询当前账号是否已设置密码：GET /api/v1/user/password
+  getPasswordStatus() {
+    return request<{ code: number; msg: string; has_password: boolean }>('/api/v1/user/password')
+  },
+
+  // 通过手机验证码设置/修改密码：PUT /api/v1/user/password
+  // 手机号与区号由服务端从登录会话取；验证码必须用 CHANGE_PASSWORD 场景申请。
+  // 成功后服务端会重新生成 session ID，浏览器自动使用新的 mwu_sess_id。
+  updatePassword(payload: { uuid: string; code: number; password: string }) {
+    return request<{ code: number; msg: string; has_password: boolean }>('/api/v1/user/password', {
+      method: 'PUT',
+      body: { ...payload, a: buildA() },
+    })
   },
 
   // 动态详情：GET /api/v1/moments/:id
@@ -661,5 +713,42 @@ export const api = {
       limit: String(limit),
     })
     return request<{ code: number; msg: string; count: number; items: ServerFeedItem[] }>(`/api/v1/feeds/user/${encodeURIComponent(uid)}?${query.toString()}`)
+  },
+
+  // ===== 通知（需登录）=====
+
+  // 通知列表：GET /api/v1/notify?category=&offset=&limit=
+  // category 缺省为全部分类；取值 account/like/follow/mention/reply（对应后端 consts.NotifyCategory*）
+  getNotifications(category: NotificationCategory | '' = '', offset = 0, limit = 20) {
+    const query = new URLSearchParams({ offset: String(offset), limit: String(limit) })
+    if (category) query.set('category', category)
+    return request<{ code: number; msg: string; count: number; notifies: ServerNotification[] }>(`/api/v1/notify?${query.toString()}`)
+  },
+
+  // 各分类未读数：GET /api/v1/notify/unread-count（导航小红点/分类页签角标）
+  getNotificationUnread() {
+    return request<{ code: number; msg: string; unread: ServerNotifyUnread }>('/api/v1/notify/unread-count')
+  },
+
+  // 标记单条通知已读（幂等）：PATCH /api/v1/notify/:id/read，返回最新未读数
+  markNotificationRead(id: string | number) {
+    return request<{ code: number; msg: string; unread: ServerNotifyUnread }>(`/api/v1/notify/${encodeURIComponent(String(id))}/read`, { method: 'PATCH' })
+  },
+
+  // 全部标记已读（幂等）：PATCH /api/v1/notify/read-all，返回最新未读数
+  markAllNotificationsRead() {
+    return request<{ code: number; msg: string; unread: ServerNotifyUnread }>('/api/v1/notify/read-all', { method: 'PATCH' })
+  },
+
+  // 删除单条通知（软删除，幂等）：DELETE /api/v1/notify/:id，返回最新未读数
+  deleteNotification(id: string | number) {
+    return request<{ code: number; msg: string; unread: ServerNotifyUnread }>(`/api/v1/notify/${encodeURIComponent(String(id))}`, { method: 'DELETE' })
+  },
+
+  // 用户在线状态批量查询：GET /api/v1/notify/presence?uids=1,2,3
+  // 在线判定基于 SSE 连接心跳：有活跃连接且心跳正常 → online=true，否则离线（last_seen 为最近活跃时间）
+  getPresence(uids: Array<string | number>) {
+    const query = new URLSearchParams({ uids: uids.map((uid) => String(Number(uid))).join(',') })
+    return request<{ code: number; msg: string; presence: ServerPresence[] }>(`/api/v1/notify/presence?${query.toString()}`)
   },
 }

@@ -21,6 +21,15 @@ export function notifySuccess(msg: string) {
   })
 }
 
+/** 信息通知（如 SSE 推送的新通知提醒） */
+export function notifyInfo(msg: string, description?: string) {
+  notification.info({
+    message: msg,
+    description,
+    duration: 4,
+  })
+}
+
 /** 错误通知：ApiRequestError 会自动追加自定义业务码 */
 export function notifyError(err: unknown, fallbackMsg = '操作失败，请稍后重试') {
   if (err instanceof ApiRequestError) {

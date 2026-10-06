@@ -16,8 +16,16 @@ export interface ServerUserPayload {
   username?: string
   nickname?: string
   avatar?: string | null
+  /** 个性签名（后端 user.bio，最长 255 字符，可多行） */
+  bio?: string
+  /** 性别：0 未知 / 1 男 / 2 女 / 3 非二元性别 */
+  gender?: number
+  /** 手机区号（后端 user.region，与手机号绑定，不支持更改） */
+  region?: number
   status?: number
   created_at?: string
+  /** 打码后的绑定手机号，仅 GET /api/v1/user/me 返回（如 "+86 138****8000"） */
+  phone?: string
 }
 
 // 当前登录用户状态

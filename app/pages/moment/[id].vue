@@ -10,6 +10,7 @@ import MomentDetail, { type MomentDetailData } from '~/components/MomentDetail.v
 import InfoModal from '~/components/modal/InfoModal.vue'
 import CommentModal from '~/components/modal/CommentModal.vue'
 import { api, ApiRequestError, normalizeComment, normalizeReply } from '~/utils/api'
+import { maxReplyDepth, resolveReplyDepths } from '~/utils/comment'
 import { notifyError, withCode } from '~/utils/notify'
 import type { MenuItem, ServerMenuPayload } from '~/types/menu'
 import type { MultipleAccountChoice } from '~/types/user'
@@ -142,9 +143,6 @@ const serverMenu = ref<ServerMenuPayload | null>({
   items: [
     { id: 'account-settings', label: '账号设置', icon: 'fa-user-gear', action: 'route', route: '/settings/account' },
     { id: 'edit-profile', label: '编辑资料', icon: 'fa-pen', action: 'route', route: '/settings/profile' },
-    { id: 'placeholder-1', label: '占位设置项', icon: 'fa-user-gear', action: 'modal' },
-    { id: 'placeholder-2', label: '占位设置项', icon: 'fa-user-gear', action: 'modal' },
-    { id: 'placeholder-3', label: '占位设置项', icon: 'fa-user-gear', action: 'modal' },
     { id: 'my-account', type: 'widget', widget: 'account' },
     { id: 'switch-account', label: '切换账号', icon: 'fa-right-left', action: 'popper' },
     { id: 'logout', label: '退出登录', icon: 'fa-right-from-bracket', action: 'action' },
@@ -313,7 +311,7 @@ const handleReply = (payload: { rootId: string; targetId: string; targetName: st
   showCommentModal.value = true
 }
 
-// 楼中楼首次展开：加载该链前若干条回复
+// 楼中楼首次展开：加载该链前若干条回复（预览态，超过预览层数的回复由「查看完整对话」加载展示）
 const REPLY_PREVIEW_SIZE = 10
 
 const handleExpandReplies = async (rootId: string) => {
@@ -325,9 +323,12 @@ const handleExpandReplies = async (rootId: string) => {
     const replies = (res.conversation.replies ?? []).map(normalizeReply)
     comment.replies = replies
     comment.replyCount = Math.max(comment.replyCount, res.conversation.count ?? replies.length)
-    if (replies.length >= comment.replyCount) {
-      comment.conversationLoaded = true
-    }
+    // 注意：预览态不设置 conversationLoaded，保证超过预览层数的链式对话仍保留「查看完整对话」入口
+    comment.replyDepth = Math.max(
+      comment.replyDepth,
+      res.conversation.root?.reply_depth ?? 0,
+      maxReplyDepth(comment.id, replies)
+    )
   } catch (err) {
     notifyError(err, '获取回复失败')
   } finally {
@@ -335,7 +336,7 @@ const handleExpandReplies = async (rootId: string) => {
   }
 }
 
-// 查看完整对话：一键加载该链下全部评论回复（分页拉取直到取完）
+// 查看完整对话：一键加载该链下全部评论回复（分页拉取直到取完），并展示全部嵌套层数
 const handleShowConversation = async (rootId: string) => {
   const comment = comments.value.find((c) => c.id === rootId)
   if (!comment || comment.repliesLoading) return
@@ -344,9 +345,11 @@ const handleShowConversation = async (rootId: string) => {
     const replies: ReplyItemData[] = []
     let offset = 0
     let total = 0
+    let rootDepth = 0
     for (;;) {
       const res = await api.getCommentConversation(rootId, offset, 100)
       total = res.conversation.count ?? 0
+      rootDepth = Math.max(rootDepth, res.conversation.root?.reply_depth ?? 0)
       const page = (res.conversation.replies ?? []).map(normalizeReply)
       replies.push(...page)
       if (page.length === 0 || replies.length >= total) break
@@ -354,6 +357,7 @@ const handleShowConversation = async (rootId: string) => {
     }
     comment.replies = replies
     comment.replyCount = Math.max(comment.replyCount, total)
+    comment.replyDepth = Math.max(comment.replyDepth, rootDepth, maxReplyDepth(comment.id, replies))
     comment.conversationLoaded = true
   } catch (err) {
     notifyError(err, '获取完整对话失败')
@@ -362,7 +366,7 @@ const handleShowConversation = async (rootId: string) => {
   }
 }
 
-// 评论/回复发送成功：评论刷新列表并计数 +1；回复插入对应楼中楼并回复数 +1
+// 评论/回复发送成功：评论刷新列表并计数 +1；回复插入对应楼中楼并回复数/层数 +1
 const handleCommentSent = (payload?: { rootId: string; reply: ReplyItemData }) => {
   if (payload?.rootId) {
     const comment = comments.value.find((c) => c.id === payload.rootId)
@@ -370,6 +374,9 @@ const handleCommentSent = (payload?: { rootId: string; reply: ReplyItemData }) =
       comment.replyCount++
       if (comment.replies) {
         comment.replies.push(payload.reply)
+        // 新回复的层数 = 被回复对象层数 + 1（被回复对象未加载时按首条评论的下一层处理）
+        const targetDepth = resolveReplyDepths(comment.id, comment.replies).get(payload.reply.replyToId) ?? 0
+        comment.replyDepth = Math.max(comment.replyDepth, targetDepth + 1)
       }
     }
     return

@@ -28,15 +28,18 @@ const auth = useAuth()
 const effectiveUser = computed(() => props.currentUser ?? auth.currentUser.value ?? null)
 const isLoggedIn = computed(() => !!effectiveUser.value)
 
+// 通知未读数（SSE 推送与 REST 共享状态），驱动「通知」入口小红点
+const { unread } = useNotifications()
+
 // 主导航项
-const mainNavItems: NavItem[] = [
+const mainNavItems = computed<NavItem[]>(() => [
   { id: 'timeline', icon: 'fa-star', label: '推荐', path: '/home' },
-  { id: 'notifications', icon: 'fa-bell', label: '公告', path: '/notifications', badge: 0 },
+  { id: 'notifications', icon: 'fa-bell', label: '通知', path: '/notifications', badge: unread.value.total || 0 },
   { id: 'notes', icon: 'fa-lightbulb', label: '活动', path: '/notes' },
   { id: 'follow-requests', icon: 'fa-user-plus', label: '社交', path: '/follow-requests' },
   { id: 'messages', icon: 'fa-comments', label: '消息', path: '/messages' },
   { id: 'cloud', icon: 'fa-cloud', label: '网盘', path: '/cloud' },
-]
+])
 
 // 发现区域
 const discoverItems: NavItem[] = [

@@ -111,6 +111,16 @@ export function useAuth() {
     }
   }
 
+  // 强制重新拉取当前用户并写入全局登录态。
+  // 用于资料修改等场景：侧边栏、导航等复用 currentUser 的位置需要同步刷新。
+  async function refreshUser(): Promise<CurrentUser | null> {
+    const user = await fetchMe()
+    if (user) {
+      applyUser(user)
+    }
+    return user
+  }
+
   // 退出登录：先销毁服务端 session，再清空本地登录态
   async function logout(): Promise<void> {
     try {
@@ -133,6 +143,7 @@ export function useAuth() {
     fetchMyAccounts,
     switchAccount,
     restoreSession,
+    refreshUser,
     logout,
   }
 }

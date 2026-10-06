@@ -45,6 +45,11 @@ export interface CommentItemData {
   stickers: CommentStickerInfo[]
   /** 楼中楼回复总数（含全部子孙回复，后端 reply_count） */
   replyCount: number
+  /**
+   * 楼中楼相对首条评论的最大嵌套层数（后端 reply_depth，首条评论为 0 层、直接回复为 1 层）。
+   * 超过预览层数（MAX_INLINE_REPLY_DEPTH）时在首条评论处提供「查看完整对话」入口。
+   */
+  replyDepth: number
   /** 楼中楼回复列表（null=尚未加载；查看完整对话后为该链全部回复） */
   replies: ReplyItemData[] | null
   /** 楼中楼回复是否加载中 */
