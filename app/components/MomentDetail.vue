@@ -373,10 +373,10 @@ const hasMoreComments = computed(() => (props.comments?.length ?? 0) < (props.co
         </button>
       </template>
 
-      <!-- 评论区空位 -->
-      <div v-else class="glass-card rounded-2xl p-8 text-center text-gray-400 text-sm">
-        <i class="fa-regular fa-comment-dots text-2xl mb-2 block"></i>
-        暂无评论，来抢沙发吧～
+      <!-- 评论区空位（图标与文字同行等高） -->
+      <div v-else class="glass-card rounded-2xl p-8 flex items-center justify-center gap-1.5 text-gray-400 text-sm">
+        <i class="fa-regular fa-comment-dots"></i>
+        <span>暂无评论，来抢沙发吧～</span>
       </div>
     </main>
   </div>

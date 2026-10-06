@@ -82,6 +82,11 @@ const handleClick = () => {
   emit('click', props.moment.id)
 }
 
+// 点击用户名/头像：上抛作者 ID，由父级跳转个人主页
+const handleUserClick = () => {
+  emit('user-click', props.moment.author.id)
+}
+
 // 点击图片预览
 const handleImageClick = (index: number) => {
   if (props.moment.images && props.moment.images.length > 0) {
